@@ -78,7 +78,7 @@
     [/^AI nghi ngờ (\d+) chỗ$/,(_,n)=>`AI flagged ${n} item(s)`],
     [/^AI đang đối chiếu & sửa lỗi trang (\d+)\/(\d+)…$/,(_,n,t)=>`AI is checking and fixing page ${n}/${t}…`],
   ];
-  const excluded = 'textarea,iframe,pre,code,script,style,.file-h .name';
+  const excluded = 'textarea,iframe,pre,code,script,style,.file-h .name,.preview-doc,.document-canvas,.source-file-name'; // nội dung tài liệu/OCR không bao giờ được dịch
   const originalText = new WeakMap();
   const originalAttrs = new WeakMap();
   let lang = 'vi';
@@ -116,7 +116,7 @@
     if (node.nodeType === Node.ELEMENT_NODE) descendants.unshift(node);
     for (const child of descendants) {
       if (child.nodeType === Node.TEXT_NODE) translateTextNode(child);
-      else if (!child.matches(excluded)) translateAttributes(child);
+      else if (!child.closest(excluded)) translateAttributes(child);
     }
   }
   function translateNode(node) {
