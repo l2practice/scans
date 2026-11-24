@@ -1226,7 +1226,7 @@ function sync(it) {
   u.prog.classList.toggle('hidden', s !== 'run');
   u.result.classList.toggle('hidden', s !== 'done');
   if (s === 'done') {
-    refreshTa(it); showNd(it); u.msg.className = 'msg' + (it.warn ? ' warn' : '');
+    refreshTa(it); refreshPreview(it, true); showNd(it); u.msg.className = 'msg' + (it.warn ? ' warn' : '');
     if (it.focus) { it.focus = false; it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     u.msg.textContent = [it.info, it.warn].filter(Boolean).join(' — ');
   }
