@@ -1056,7 +1056,7 @@ const curFmt = () => $('#fmt').value;
 
 const isImg = f => IMG_EXT.includes(extOf(f.name)) || (f.type || '').startsWith('image/');
 function makeItem(file, files, focus) {
-  const it = { id: ++uid, file, files, focus, status: 'wait', md: '', info: '', warn: '', error: '' };
+  const it = { id: ++uid, file, files, srcFiles: files || (isImg(file) ? [file] : null), focus, status: 'wait', md: '', info: '', warn: '', error: '' };
   it.node = renderItem(it); items.push(it); $('#list').append(it.node);
 }
 function addFiles(files, o = {}) {
@@ -1175,6 +1175,7 @@ function renderItem(it) {
     dlSum: el('button', { onclick: () => makeSummary(it) }, '🎨 Tóm tắt trực quan'),
     dlRev: el('button', { onclick: () => reviewIt(it) }, '🔍 AI soát chỗ có thể lỗi'),
     dlFix: el('button', { onclick: () => polish(it) }, '✨ AI sửa lỗi OCR'),
+    dlImg: el('button', { title: 'Lưu ảnh gốc vào thư viện ảnh (điện thoại) hoặc tải về (máy tính)', onclick: () => saveToPhotos(it.srcFiles) }, '💾 Lưu ảnh gốc'),
     review: el('div', { class: 'hidden' }),
     sum: el('div', { class: 'hidden' }),
     hint: el('div', { class: 'msg' }, 'Chỉ chữ thuần – định dạng (căn lề, bảng, in đậm…) vẫn được giữ khi tải Word/Markdown. Không sửa xuyên qua nhiều ô bảng; cần xem ký hiệu bố cục thì mở tab "Markdown + bố cục".'),
@@ -1187,7 +1188,7 @@ function renderItem(it) {
       el('button', { onclick: async () => { await copyText(domToText(mdToDom(it.md).body)); flash(it, 'Đã sao chép văn bản'); } }, 'Sao chép văn bản'),
       el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, 'Sao chép Markdown'),
       it.ui.dlRev, it.ui.dlSum,
-      it.ui.dlFix,
+      it.ui.dlFix, ...(it.srcFiles ? [it.ui.dlImg] : []),
       el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, 'Chuyển lại'),
       el('button', { onclick: () => { items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, 'Xoá')));
   return el('div', { class: 'card' },
@@ -1359,6 +1360,15 @@ $('#settings').open = innerWidth > 700;
 $('#pickBtn').onclick = () => pick.click();
 
 const cam = { stream: null, shots: [], url: null };
+let camStamp = '';
+/* Lưu ảnh: điện thoại → bảng chia sẻ (chọn "Lưu hình ảnh" để vào Ảnh); máy tính/không hỗ trợ → tải file về */
+async function saveToPhotos(files) {
+  if (!files || !files.length) return;
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: 'Ảnh quét' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  files.forEach((f, i) => setTimeout(() => saveBlob(f, f.name || `scan-${i + 1}.jpg`), i * 350));
+}
 const updCam = () => {
   $('#camDone').disabled = !cam.shots.length; $('#camDone').textContent = cam.shots.length ? `Xong (${cam.shots.length})` : 'Xong';
   $('#camCnt').textContent = cam.shots.length ? `Đã chụp ${cam.shots.length} trang – chụp tiếp hoặc bấm Xong` : 'Đặt tài liệu vào khung, giữ máy thẳng và đủ sáng';
@@ -1370,7 +1380,7 @@ async function openCam() {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('no camera api');
     cam.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false });
   } catch { $('#camNative').click(); return; } // http (không phải https) hoặc bị từ chối → dùng camera hệ thống
-  cam.shots = []; updCam();
+  cam.shots = []; camStamp = new Date().toTimeString().slice(0, 5).replace(':', ''); try { $('#camSave').checked = localStorage.getItem('dc_camsave') !== '0'; } catch { } updCam();
   const v = $('#camVideo'); v.srcObject = cam.stream; $('#cam').classList.remove('hidden');
   try { await v.play(); } catch { }
 }
@@ -1379,11 +1389,13 @@ async function shoot() {
   const v = $('#camVideo'); if (!v.videoWidth) return;
   const cv = el('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight; cv.getContext('2d').drawImage(v, 0, 0);
   const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.92));
-  cam.shots.push(new File([blob], `scan-${String(cam.shots.length + 1).padStart(3, '0')}.jpg`, { type: 'image/jpeg' }));
+  cam.shots.push(new File([blob], `scan-${camStamp}-${String(cam.shots.length + 1).padStart(2, '0')}.jpg`, { type: 'image/jpeg' }));
   const f = $('#camFlash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); updCam();
 }
 function doneCam() {
-  const shots = cam.shots.slice(); closeCam(); if (!shots.length) return;
+  const shots = cam.shots.slice(), keep = $('#camSave').checked; try { localStorage.setItem('dc_camsave', keep ? '1' : '0'); } catch { }
+  if (keep && shots.length) saveToPhotos(shots); // gọi ngay trong lần chạm để trình duyệt cho phép mở bảng chia sẻ
+  closeCam(); if (!shots.length) return;
   const t = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   if (shots.length === 1) addFiles([new File([shots[0]], `Quét camera ${t}.jpg`, { type: 'image/jpeg' })], { focus: true });
   else addFiles(shots, { merge: true, name: `Quét camera ${t} (${shots.length} trang)`, focus: true });

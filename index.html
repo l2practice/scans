@@ -78,6 +78,8 @@ iframe.sum{width:100%;height:620px;border:1px solid var(--line);border-radius:8p
 #cam .shutter:active{transform:scale(.92)}
 #cam .cnt{position:absolute;top:calc(12px + env(safe-area-inset-top));left:0;right:0;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}
 #cam .thumb{width:48px;height:48px;border-radius:6px;object-fit:cover;border:2px solid #fff}
+#cam .camsave{position:absolute;left:0;right:0;bottom:calc(112px + env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}
+#cam .camsave input{width:18px;height:18px;vertical-align:-3px;margin-right:6px}
 #cam .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
 #cam .flash.on{animation:fl .25s}
 @keyframes fl{0%{opacity:.8}100%{opacity:0}}
@@ -221,6 +223,7 @@ iframe.sum{width:100%;height:620px;border:1px solid var(--line);border-radius:8p
   <div class="cnt" id="camCnt">Đặt tài liệu vào khung, giữ máy thẳng và đủ sáng</div>
   <video id="camVideo" playsinline muted autoplay></video>
   <div class="guide"></div><div class="flash" id="camFlash"></div>
+  <label class="camsave"><input type="checkbox" id="camSave" checked> 💾 Lưu ảnh vào thư viện máy khi bấm Xong</label>
   <div class="ctl">
     <button id="camClose">Huỷ</button>
     <img class="thumb hidden" id="camThumb" alt="">
