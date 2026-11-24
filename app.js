@@ -1151,8 +1151,8 @@ function renderItem(it) {
   ta.addEventListener('input', () => onPlainInput(it));
   taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; refreshPreview(it); showNd(it); });
   const pv = el('iframe', { class: 'pv hidden', sandbox: '' });
-  const tabTx = el('button', { class: 'on', onclick: () => tab('text') }, 'Văn bản (sửa được)');
-  const tabPv = el('button', { onclick: () => tab('pv') }, 'Xem trước');
+  const tabTx = el('button', { onclick: () => tab('text') }, 'Văn bản (sửa được)');
+  const tabPv = el('button', { class: 'on', onclick: () => tab('pv') }, 'Xem trước');
   const tabAdv = el('button', { onclick: () => tab('md') }, 'Markdown + bố cục');
   const tab = name => {
     tabTx.classList.toggle('on', name === 'text'); tabPv.classList.toggle('on', name === 'pv'); tabAdv.classList.toggle('on', name === 'md');
@@ -1169,8 +1169,8 @@ function renderItem(it) {
     dlRaw: el('button', { class: 'primary', onclick: () => download(it, 'docx') }, '⬇ Word gốc (raw)'),
     dl: el('button', { onclick: () => download(it, curFmt()) }, 'Tải xuống'),
     cpTxt: el('button', { class: 'primary copybtn', title: 'Sao chép toàn bộ văn bản (đúng như đang hiển thị ở tab Văn bản)', onclick: async e => { const b = e.currentTarget, old = b.textContent; await copyText(it.plain ? it.plain.text : plainMap(it.md).text); b.textContent = '✓ Đã sao chép'; setTimeout(() => { b.textContent = old; }, 1600); } }, '📋 Sao chép văn bản'),
-    dlMdRaw: el('button', { class: 'dl', title: 'Markdown sạch, không có thẻ HTML', onclick: () => download(it, 'mdraw') }, '⬇ .md thuần'),
-    dlMdFmt: el('button', { class: 'dl', title: 'Markdown có thẻ HTML giữ bố cục (căn giữa, bảng, đậm…)', onclick: () => download(it, 'md') }, '⬇ .md có format'),
+    dlMdRaw: el('button', { class: 'dl', title: 'Markdown sạch, không có thẻ HTML', onclick: () => download(it, 'mdraw') }, '⬇ Tải .md thuần'),
+    dlMdFmt: el('button', { class: 'dl', title: 'Markdown có thẻ HTML giữ bố cục (căn giữa, bảng, đậm…)', onclick: () => download(it, 'md') }, '⬇ Tải .md có format'),
     result: el('div', { class: 'hidden' }),
     nd: el('div', { class: 'msg nd hidden' }),
     dlSum: el('button', { onclick: () => makeSummary(it) }, '🎨 Tóm tắt trực quan'),
@@ -1182,16 +1182,35 @@ function renderItem(it) {
     hint: el('div', { class: 'msg' }, 'Chỉ chữ thuần – định dạng (căn lề, bảng, in đậm…) vẫn được giữ khi tải Word/Markdown. Không sửa xuyên qua nhiều ô bảng; cần xem ký hiệu bố cục thì mở tab "Markdown + bố cục".'),
   };
   it.ui.prog.append(it.ui.bar);
-  it.ui.result.append(
-    el('div', { class: 'toprow' }, it.ui.cpTxt, it.ui.dlMdRaw, it.ui.dlMdFmt), el('div', { class: 'tabs' }, tabTx, tabPv, tabAdv), ta, taMd, pv, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum,
-    el('div', { class: 'acts' },
+  const quickPanel = el('section', { class: 'quick-panel quick-export' },
+    el('h3', {}, '↓ Tải nhanh'),
+    el('div', { class: 'quick-actions' }, it.ui.cpTxt, it.ui.dlMdRaw, it.ui.dlMdFmt));
+  const viewPanel = el('section', { class: 'quick-panel quick-view' },
+    el('h3', {}, '◉ Chế độ xem'),
+    el('div', { class: 'tabs view-tabs' }, tabTx, tabPv, tabAdv));
+  const documentPanel = el('main', { class: 'document-panel' },
+    el('div', { class: 'document-canvas' }, ta, taMd, pv), it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum);
+  const sidebar = el('aside', { class: 'action-sidebar' },
+    el('section', { class: 'side-section ai-section' },
+      el('h3', {}, '✨ Xử lý & AI'),
+      el('div', { class: 'side-actions' }, it.ui.dlSum, it.ui.dlFix, it.ui.dlRev)),
+    el('section', { class: 'side-section manage-section' },
+      el('h3', {}, '⚙ Chỉnh sửa & quản lý'),
+      el('div', { class: 'side-actions' },
+        ...(it.srcFiles ? [it.ui.dlImg] : []),
+        el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, '↻ Chuyển lại'),
+        el('button', { class: 'danger', onclick: () => { items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, '⌫ Xoá'))));
+  const exportPanel = el('section', { class: 'export-panel' },
+    el('h3', {}, '↓ Xuất file'),
+    el('div', { class: 'export-actions' },
       it.ui.dl30, it.ui.dlRaw, it.ui.dl,
-      el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, 'Sao chép Markdown'),
-      it.ui.dlRev, it.ui.dlSum,
-      it.ui.dlFix, ...(it.srcFiles ? [it.ui.dlImg] : []),
-      el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, 'Chuyển lại'),
-      el('button', { onclick: () => { items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, 'Xoá')));
-  return el('div', { class: 'card' },
+      el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, '▢ Sao chép Markdown')));
+  it.ui.result.append(
+    el('div', { class: 'item-toolbar' }, quickPanel, viewPanel),
+    el('div', { class: 'workspace-grid' }, documentPanel, sidebar),
+    exportPanel);
+  tab('pv');
+  return el('div', { class: 'card result-card' },
     el('div', { class: 'file-h' }, el('span', { class: 'name' }, it.file.name), el('span', { class: 'badge' }, fmtSize(it.file.size)), it.ui.badge),
     it.ui.prog, it.ui.msg, it.ui.result);
 }
