@@ -37,3 +37,6 @@ Chọn Gemini/Claude, dán API key, bấm "Kiểm tra key". Dùng cho: OCR chín
 
 ## 🔍 AI soát chỗ có thể lỗi
 Đối chiếu ảnh gốc ↔ văn bản, liệt kê chỗ đáng ngờ (nhầm ký tự, số liệu, tổng không khớp, bảng lệch cột...). Mỗi mục có "Tới chỗ" và "Áp dụng".
+
+## Cách dùng AI tiết kiệm token
+Mặc định ("Tesseract đọc trước, AI chỉ sửa chỗ sai"): Tesseract OCR cả file (nhanh, miễn phí), sau đó AI nhận ảnh + văn bản và chỉ trả về danh sách chỗ cần sửa (JSON nhỏ), app tự áp dụng và liệt kê để bạn xem/hoàn tác. Chọn "AI đọc toàn bộ" nếu cần đọc chữ viết tay (tài liệu viết tay luôn dùng AI đọc toàn bộ).

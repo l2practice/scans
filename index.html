@@ -128,6 +128,11 @@ iframe.sum{width:100%;height:620px;border:1px solid var(--line);border-radius:8p
           <option value="claude">AI – Claude (Anthropic)</option>
         </select>
       </div>
+      <div class="aiF"><label class="f" for="aiMode">Cách dùng AI</label>
+        <select id="aiMode">
+          <option value="fix" selected>Tesseract đọc trước, AI chỉ sửa chỗ sai (nhanh, tiết kiệm token) ⭐</option>
+          <option value="full">AI đọc toàn bộ ảnh (chậm, tốn token; tốt nhất cho chữ viết tay)</option>
+        </select></div>
       <div class="aiF"><label class="f" for="aiKey">API key</label>
         <div class="row"><input id="aiKey" type="password" autocomplete="off" placeholder="Dán API key vào đây"><button id="aiShow" type="button" title="Hiện/ẩn key">👁</button></div></div>
       <div class="aiF"><label class="f" for="aiModel">Chọn model AI (tự tải danh sách khi có key)</label><div class="row"><select id="aiModel"></select><button id="aiList" type="button" title="Tải lại danh sách model">↻</button></div></div>
