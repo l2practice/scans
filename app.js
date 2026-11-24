@@ -800,11 +800,19 @@ async function convertFile(file, ctx) {
 }
 
 /* ================= Xuất file ================= */
-function sanitize(doc) {
-  doc.querySelectorAll('script,style,iframe,object,embed,link,meta,base,form').forEach(n => n.remove());
+// Lọc HTML không tin cậy (nội dung file/AI): bỏ script/iframe/form…, thuộc tính on*, và URL nguy hiểm (kể cả khi chèn ký tự ẩn như tab/xuống dòng).
+// opt.keepStyle: giữ <style> và thuộc tính style (dành cho trang tóm tắt của AI, vốn hiển thị trong iframe sandbox).
+const URL_ATTRS = /^(href|src|xlink:href|action|formaction|poster|background|ping)$/i;
+function sanitize(doc, opt = {}) {
+  doc.querySelectorAll('script,iframe,frame,frameset,object,embed,applet,link,meta,base,form' + (opt.keepStyle ? '' : ',style')).forEach(n => n.remove());
   doc.querySelectorAll('*').forEach(n => {
     [...n.attributes].forEach(a => {
-      if (/^on/i.test(a.name) || /^style$/i.test(a.name) || (/^(href|src|xlink:href)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+      const name = a.name.toLowerCase();
+      if (/^on/.test(name) || name === 'srcdoc' || (!opt.keepStyle && name === 'style')) { n.removeAttribute(a.name); return; }
+      if (URL_ATTRS.test(name)) {
+        const v = a.value.replace(/[\u0000-\u0020\u007f-\u00a0\u1680\u180e\u2000-\u200f\u2028-\u202f\u205f-\u2064\u3000\ufeff]+/g, '').toLowerCase();
+        if (/^(javascript|vbscript|livescript):/.test(v) || (/^data:/.test(v) && !(name === 'src' && /^data:image\/(png|jpe?g|gif|webp);/.test(v)))) n.removeAttribute(a.name);
+      }
     });
   });
 }
@@ -1252,7 +1260,17 @@ function refreshPreview(it, now) {
   if (!now && it.ui.pv.classList.contains('hidden')) return;
   try {
     const doc = mdToDom(it.md), body = el('div', { class: 'preview-content' });
-    body.innerHTML = doc.body.innerHTML; it.ui.pv.replaceChildren(body);
+    body.innerHTML = doc.body.innerHTML;
+    body.querySelectorAll('a[href]').forEach(a => { // không để bấm link làm mất trang kết quả
+      if (/^(https?:|mailto:|#)/i.test(a.getAttribute('href') || '')) { a.target = '_blank'; a.rel = 'noopener noreferrer'; } else a.removeAttribute('href');
+    });
+    let wide = false;
+    body.querySelectorAll('table:not([data-plain])').forEach(t => { // bảng nhiều cột: cuộn ngang thay vì bóp ô
+      if (tableGrid(t).nc >= 9) { wide = true; t.classList.add('wide'); const w = el('div', { class: 'table-scroll' }); t.replaceWith(w); w.append(t); }
+    });
+    if (wide) body.classList.add('has-wide');
+    if (!body.textContent.trim() && it.md.trim()) body.append(el('pre', {}, it.plain ? it.plain.text : '')); // không bao giờ để khung trống nếu có chữ
+    it.ui.pv.replaceChildren(body);
   } catch (e) { it.ui.pv.textContent = e.message; }
 }
 function sync(it) {
@@ -1470,7 +1488,8 @@ function summaryPrompt(hasImg) {
 }
 function cleanSummaryHtml(raw) {
   let t = stripFence(raw); const i = t.search(/<!doctype html|<html/i); if (i > 0) t = t.slice(i);
-  const doc = new DOMParser().parseFromString(t, 'text/html'); sanitize(doc);
+  const doc = new DOMParser().parseFromString(t, 'text/html'); sanitize(doc, { keepStyle: true });
+  doc.querySelectorAll('[style]').forEach(n => n.setAttribute('style', n.getAttribute('style').replace(/url\((?!['"]?data:)[^)]*\)/g, 'none')));
   doc.querySelectorAll('img,video,audio,source,a[href^="http"]').forEach(n => n.tagName === 'A' ? n.removeAttribute('href') : n.remove());
   doc.querySelectorAll('style').forEach(st => { st.textContent = st.textContent.replace(/@import[^;]+;?/g, '').replace(/url\((?!['"]?data:)[^)]*\)/g, 'none'); });
   return '<!doctype html>\n' + doc.documentElement.outerHTML;
