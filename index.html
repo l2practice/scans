@@ -51,7 +51,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
 .msg{font-size:13px;color:var(--muted);min-height:18px}
 .msg.err{color:var(--err)} .msg.warn{color:var(--warn)}
-.tabs{display:flex;gap:4px;margin:12px 0 8px}
+.tabs{display:flex;gap:4px;margin:10px 0 8px}
 .tabs button{padding:5px 12px;min-height:34px}
 .tabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 textarea.src{width:100%;min-height:340px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:13.5px/1.5 ui-monospace,Menlo,Consolas,monospace}
@@ -63,6 +63,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:20px}
 .aihelp{font-size:12.5px;color:var(--muted);margin-top:10px}
 .aihelp a{color:var(--accent)}
 .row{display:flex;gap:6px}.row button{min-width:44px;padding:6px}
+.toprow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.toprow button.dl{font-size:13px;padding:6px 12px;min-height:38px}
+.copybtn{font-weight:700;font-size:15.5px;padding:10px 18px;min-height:44px;box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 40%,transparent)}
 .tabs{flex-wrap:wrap;align-items:center}.tabs .sp2{flex:1}
 .tabs button.dl{font-size:13px;padding:4px 10px;min-height:32px}
 .rv{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13.5px}.rv.done{opacity:.5}.rv code{background:var(--code);padding:1px 5px;border-radius:4px;word-break:break-all}.rv .r2{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.rv .r2 button{min-height:30px;padding:3px 10px;font-size:13px}
@@ -95,6 +98,8 @@ iframe.sum{width:100%;height:620px;border:1px solid var(--line);border-radius:8p
   iframe.pv{height:380px}
   .acts button{flex:1 1 45%}
   .acts button.primary{flex:1 1 100%}
+  .toprow .copybtn{flex:1 1 100%}
+  .toprow button.dl{flex:1 1 40%}
   .bar{position:fixed;left:0;right:0;bottom:0;margin:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--line);z-index:20}
   .bar .sp{display:none}
   .bar .msg{width:100%;order:-1}

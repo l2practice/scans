@@ -1168,6 +1168,7 @@ function renderItem(it) {
     dl30: el('button', { class: 'primary', onclick: () => download(it, 'docx30') }, '⬇ Word chuẩn thể thức'),
     dlRaw: el('button', { class: 'primary', onclick: () => download(it, 'docx') }, '⬇ Word gốc (raw)'),
     dl: el('button', { onclick: () => download(it, curFmt()) }, 'Tải xuống'),
+    cpTxt: el('button', { class: 'primary copybtn', title: 'Sao chép toàn bộ văn bản (đúng như đang hiển thị ở tab Văn bản)', onclick: async e => { const b = e.currentTarget, old = b.textContent; await copyText(it.plain ? it.plain.text : plainMap(it.md).text); b.textContent = '✓ Đã sao chép'; setTimeout(() => { b.textContent = old; }, 1600); } }, '📋 Sao chép văn bản'),
     dlMdRaw: el('button', { class: 'dl', title: 'Markdown sạch, không có thẻ HTML', onclick: () => download(it, 'mdraw') }, '⬇ .md thuần'),
     dlMdFmt: el('button', { class: 'dl', title: 'Markdown có thẻ HTML giữ bố cục (căn giữa, bảng, đậm…)', onclick: () => download(it, 'md') }, '⬇ .md có format'),
     result: el('div', { class: 'hidden' }),
@@ -1182,10 +1183,9 @@ function renderItem(it) {
   };
   it.ui.prog.append(it.ui.bar);
   it.ui.result.append(
-    el('div', { class: 'tabs' }, tabTx, tabPv, tabAdv, el('span', { class: 'sp2' }), it.ui.dlMdRaw, it.ui.dlMdFmt), ta, taMd, pv, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum,
+    el('div', { class: 'toprow' }, it.ui.cpTxt, it.ui.dlMdRaw, it.ui.dlMdFmt), el('div', { class: 'tabs' }, tabTx, tabPv, tabAdv), ta, taMd, pv, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum,
     el('div', { class: 'acts' },
       it.ui.dl30, it.ui.dlRaw, it.ui.dl,
-      el('button', { onclick: async () => { await copyText(domToText(mdToDom(it.md).body)); flash(it, 'Đã sao chép văn bản'); } }, 'Sao chép văn bản'),
       el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, 'Sao chép Markdown'),
       it.ui.dlRev, it.ui.dlSum,
       it.ui.dlFix, ...(it.srcFiles ? [it.ui.dlImg] : []),
