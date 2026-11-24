@@ -439,8 +439,11 @@ async function canvasPic(cv, maxDim = 1400, q = 0.72) {
   return { data: new Uint8Array(await blob.arrayBuffer()), w: Math.round(cv.width * k), h: Math.round(cv.height * k) };
 }
 
+/* Chỉ dùng AI để đọc cả ảnh khi: chọn chế độ "AI đọc toàn bộ" hoặc tài liệu viết tay (Tesseract không đọc được). Mặc định: Tesseract đọc, AI chỉ sửa. */
+const useAiOcr = opts => opts.engine !== 'tess' && (opts.aiMode === 'full' || opts.kind === 'free');
+
 async function ocrCanvas(cv, opts) {
-  if (opts.engine !== 'tess') return aiOcr(cv, opts);
+  if (useAiOcr(opts)) return aiOcr(cv, opts);
   const tables = opts.tables ? TBL.detect(cv) : []; // dò khung bảng trên ảnh gốc (trước khi nhị phân hoá)
   if (opts.pre) preprocess(cv);
   const worker = await getWorker(opts.lang);
@@ -520,7 +523,7 @@ async function pdfPageLines(page, tc) {
 async function convertPdf(file, ctx) {
   const { opts, progress } = ctx;
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  const parts = [], pagePics = {}; let ocrPages = 0, confSum = 0, confN = 0, lowPages = [], nTables = 0;
+  const parts = [], pagePics = {}, ocrList = []; let ocrPages = 0, confSum = 0, confN = 0, lowPages = [], nTables = 0;
   for (let n = 1; n <= pdf.numPages; n++) {
     const base = (n - 1) / pdf.numPages, span = 1 / pdf.numPages;
     progress(base, `Trang ${n}/${pdf.numPages}`);
@@ -542,11 +545,11 @@ async function convertPdf(file, ctx) {
       g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
       await page.render({ canvasContext: g, viewport: vp }).promise;
       ocr.onProgress = f => progress(base + span * (0.15 + 0.85 * f), `Trang ${n}/${pdf.numPages}: OCR ${Math.round(f * 100)}%`);
-      if (opts.engine !== 'tess') progress(base + span * 0.2, `Trang ${n}/${pdf.numPages}: AI đang đọc…`);
+      if (useAiOcr(opts)) progress(base + span * 0.2, `Trang ${n}/${pdf.numPages}: AI đang đọc…`);
       if (ocrPages < 30) pagePics[n] = await canvasPic(cv);
       const r = await ocrCanvas(cv, opts);
       ocr.onProgress = null; cv.width = cv.height = 0;
-      md = r.md; ocrPages++; nTables += r.tables || 0;
+      md = r.md; ocrPages++; ocrList.push(n); nTables += r.tables || 0;
       if (r.conf != null) { confSum += r.conf; confN++; if (r.conf < 70) lowPages.push(n); }
     }
     page.cleanup();
@@ -558,7 +561,7 @@ async function convertPdf(file, ctx) {
   const text = parts.join('\n\n');
   const body = text.replace(/<!--.*?-->/g, '').trim();
   if (nTables) info += ` · ${nTables} bảng`;
-  return { pagePics, md: text, info, warn: body ? warn : 'Không trích được chữ nào. Thử chế độ "Luôn OCR mọi trang".' };
+  return { pagePics, ocrPages: ocrList, md: text, info, warn: body ? warn : 'Không trích được chữ nào. Thử chế độ "Luôn OCR mọi trang".' };
 }
 
 /* ================= Ảnh ================= */
@@ -580,7 +583,7 @@ async function convertImage(file, ctx) {
   }
   bmp.close && bmp.close();
   ocr.onProgress = f => progress(0.1 + 0.9 * f, `OCR ${Math.round(f * 100)}%`);
-  if (opts.engine !== 'tess') progress(0.2, 'AI đang đọc…');
+  if (useAiOcr(opts)) progress(0.2, 'AI đang đọc…');
   const r = await ocrCanvas(cv, opts);
   ocr.onProgress = null; cv.width = cv.height = 0;
   const ai = r.conf == null;
@@ -588,7 +591,7 @@ async function convertImage(file, ctx) {
     md: r.md,
     info: ai ? `Ảnh · OCR bằng AI (${opts.engine === 'gemini' ? 'Gemini' : 'Claude'})` : `Ảnh OCR · độ tin cậy ~${Math.round(r.conf)}%` + (r.tables ? ` · ${r.tables} bảng` : ''),
     warn: !r.md.trim() ? 'Không nhận dạng được chữ.' : (!ai && opts.kind === 'free' ? 'Ghi chú/sơ đồ viết tay: Tesseract không đọc được chữ viết tay – hãy chọn công cụ AI trong Tuỳ chọn.' : (!ai && r.conf < 70 ? 'OCR kém tin cậy – hãy soát lại kỹ (hoặc dùng chế độ AI).' : '')),
-    pics: pic ? [pic] : null,
+    pics: pic ? [pic] : null, isOcr: true,
   };
 }
 async function convertMany(files, ctx) {
@@ -600,7 +603,7 @@ async function convertMany(files, ctx) {
     if (r.warn) low++;
     if (r.pics) pics.push(...r.pics);
   }
-  return { pics: pics.length ? pics : null, md: parts.join('\n\n'), info: `${files.length} ảnh`, warn: low ? `${low} ảnh OCR kém tin cậy hoặc trống – hãy soát lại.` : '' };
+  return { isOcr: true, pics: pics.length ? pics : null, md: parts.join('\n\n'), info: `${files.length} ảnh`, warn: low ? `${low} ảnh OCR kém tin cậy hoặc trống – hãy soát lại.` : '' };
 }
 
 /* ================= Office & khác ================= */
@@ -1021,7 +1024,7 @@ function toPlainMd(md) { // Markdown thuần: bỏ thẻ HTML bố cục, bảng
 const items = []; let running = false, uid = 0;
 const getOpts = () => ({
   ocrMode: $('#ocrMode').value, lang: $('#lang').value, pre: $('#pre').checked, keepBr: $('#keepBr').checked,
-  tables: $('#tables').checked, kind: $('#docKind').value, embed: $('#embed').checked, engine: $('#engine').value, layout: $('#layout').checked, aiKey: $('#aiKey').value.trim(), aiModel: $('#aiModel').value.trim(),
+  tables: $('#tables').checked, aiMode: $('#aiMode').value, kind: $('#docKind').value, embed: $('#embed').checked, engine: $('#engine').value, layout: $('#layout').checked, aiKey: $('#aiKey').value.trim(), aiModel: $('#aiModel').value.trim(),
 });
 const curFmt = () => $('#fmt').value;
 
@@ -1062,6 +1065,7 @@ function renderItem(it) {
     nd: el('div', { class: 'msg nd hidden' }),
     dlSum: el('button', { onclick: () => makeSummary(it) }, '🎨 Tóm tắt trực quan'),
     dlRev: el('button', { onclick: () => reviewIt(it) }, '🔍 AI soát chỗ có thể lỗi'),
+    dlFix: el('button', { onclick: () => polish(it) }, '✨ AI sửa lỗi OCR'),
     review: el('div', { class: 'hidden' }),
     sum: el('div', { class: 'hidden' }),
     hint: el('div', { class: 'msg' }, 'Ký hiệu bố cục: {giữa} {phải} {đều} = căn lề · {thụt} = thụt đầu dòng · {p} = đoạn nguyên văn · **đậm** · *nghiêng* · {bảng…} = bảng đầu trang không viền (ô bắt đầu bằng < ^ > = căn trái/giữa/phải, ¦ ngăn cột). Xoá ký hiệu nếu không cần.'),
@@ -1074,7 +1078,7 @@ function renderItem(it) {
       el('button', { onclick: async () => { await copyText(domToText(mdToDom(it.md).body)); flash(it, 'Đã sao chép văn bản'); } }, 'Sao chép văn bản'),
       el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, 'Sao chép Markdown'),
       it.ui.dlRev, it.ui.dlSum,
-      el('button', { onclick: () => polish(it) }, '✨ AI tự sửa lỗi OCR'),
+      it.ui.dlFix,
       el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, 'Chuyển lại'),
       el('button', { onclick: () => { items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, 'Xoá')));
   return el('div', { class: 'card' },
@@ -1135,8 +1139,14 @@ async function runQueue() {
       try {
         const ctx = { opts: getOpts(), progress };
         const r = it.files ? await convertMany(it.files, ctx) : await convertFile(it.file, ctx);
-        it.pics = r.pics || null; it.pagePics = r.pagePics || null; it.md = (r.md || '').trim() + '\n'; it.info = r.info || ''; it.warn = r.warn || ''; it.status = 'done';
+        it.pics = r.pics || null; it.pagePics = r.pagePics || null; it.ocrPages = r.ocrPages || null; it.md = (r.md || '').trim() + '\n'; it.info = r.info || ''; it.warn = r.warn || ''; it.status = 'done';
         if (!r.md.trim() && !it.warn) it.warn = 'Kết quả trống.';
+        const o = ctx.opts;
+        if (o.engine !== 'tess' && o.aiKey && !useAiOcr(o) && (r.isOcr || (r.ocrPages && r.ocrPages.length)) && r.md.trim()) {
+          it.status = 'run'; sync(it); progress(1, 'Tesseract xong – AI đang sửa chỗ sai…');
+          const n = await aiFixIt(it, o, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
+          it.status = 'done'; if (n.applied) it.info += ` · AI đã sửa ${n.applied} chỗ`; if (n.error) it.warn = (it.warn ? it.warn + ' ' : '') + 'AI chưa sửa được (' + n.error.slice(0, 110) + ') – giữ kết quả Tesseract; bấm "✨ AI sửa lỗi OCR" để thử lại.';
+        }
       } catch (e) { console.error(e); it.status = 'error'; it.error = e.message || String(e); }
       sync(it);
     }
@@ -1177,12 +1187,12 @@ async function copyText(t) {
 }
 async function polish(it) {
   const o = getOpts();
-  if (o.engine === 'tess') { alert('Hãy chọn "Công cụ OCR" là Gemini hoặc Claude và nhập API key trong mục Tuỳ chọn.'); return; }
-  const old = it.ui.msg.textContent; it.ui.msg.className = 'msg'; it.ui.msg.textContent = 'AI đang soát lỗi…';
-  try {
-    it.md = (await aiPolish(it.md, o)).trim() + '\n'; it.ui.ta.value = toEdit(it.md); refreshPreview(it);
-    it.ui.msg.textContent = 'AI đã soát lỗi – hãy đọc lại trước khi tải xuống.';
-  } catch (e) { it.ui.msg.className = 'msg err'; it.ui.msg.textContent = e.message; setTimeout(() => { it.ui.msg.className = 'msg'; it.ui.msg.textContent = old; }, 4000); }
+  if (o.engine === 'tess' || !o.aiKey) { alert('Hãy chọn Gemini hoặc Claude và dán API key ở khung "🤖 AI".'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
+  const btn = it.ui.dlFix; btn.disabled = true; const old = it.ui.msg.textContent; it.ui.msg.className = 'msg'; it.ui.msg.textContent = 'AI đang sửa lỗi…';
+  const n = await aiFixIt(it, o, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
+  btn.disabled = false;
+  if (n.error) { it.ui.msg.className = 'msg err'; it.ui.msg.textContent = 'AI chưa sửa được: ' + n.error; setTimeout(() => { it.ui.msg.className = 'msg'; it.ui.msg.textContent = old; }, 6000); }
+  else { it.ui.msg.className = 'msg'; it.ui.msg.textContent = n.applied ? `AI đã sửa ${n.applied} chỗ – xem danh sách bên dưới, có thể hoàn tác.` : 'AI không thấy chỗ nào cần sửa.'; }
 }
 const store = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { } } };
 function aiOpts() { const e = $('#engine').value; return { engine: e, aiKey: $('#aiKey').value.trim(), aiModel: $('#aiModel').value.trim() }; }
@@ -1358,4 +1368,45 @@ async function reviewIt(it) {
     });
   } catch (e) { box.className = 'msg err'; box.textContent = 'Không kiểm tra được: ' + e.message; }
   finally { btn.disabled = false; }
+}
+
+/* ===== Tesseract đọc trước → AI chỉ trả về DANH SÁCH SỬA (ít token) rồi app tự áp dụng ===== */
+function fixPrompt(hasImg) {
+  return 'Bạn là bộ sửa lỗi OCR cho văn bản tiếng Việt. ' + (hasImg ? 'Hãy đối chiếu ẢNH GỐC với VĂN BẢN OCR (do Tesseract đọc) bên dưới. ' : 'Không có ảnh gốc; chỉ sửa những lỗi hiển nhiên theo ngữ cảnh. ') +
+    'CHỈ trả về một mảng JSON các chỗ cần sửa, mỗi phần tử {"where":"trích NGUYÊN VĂN đoạn sai (≤80 ký tự, đủ dài để không trùng chỗ khác)","fix":"đúng đoạn đó sau khi sửa theo ảnh"}. ' +
+    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung, KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
+}
+function parseJsonArray(raw) { try { const a = raw.indexOf('['), b = raw.lastIndexOf(']'); const v = JSON.parse(raw.slice(a, b + 1)); return Array.isArray(v) ? v : []; } catch { return []; } }
+async function aiFixIt(it, o, onProg) {
+  const marks = /<!--\s*Trang\s+\d+\s*-->/.test(it.md), pages = splitPages(it.md), changes = [], out = []; let error = '', stop = false;
+  it.mdBeforeAI = it.mdBeforeAI || it.md;
+  for (const [k, pg] of pages.entries()) {
+    const isOcr = it.ocrPages ? it.ocrPages.includes(pg.n) : true;
+    if (stop || !isOcr || !pg.md.trim()) { out.push(pg); continue; }
+    onProg && onProg(k, pages.length);
+    const pic = (it.pagePics && it.pagePics[pg.n]) || (it.pics && it.pics[pg.n - 1]);
+    let txt = toEdit(pg.md), n0 = changes.length;
+    try {
+      const raw = await aiCall(o, fixPrompt(!!pic) + '\n\n=== VĂN BẢN OCR ===\n' + txt.slice(0, 30000), pic ? toB64(pic.data) : null, 6000);
+      for (const c of parseJsonArray(raw)) {
+        if (!c || typeof c.where !== 'string' || typeof c.fix !== 'string' || !c.where || c.fix === c.where) continue;
+        const i = txt.indexOf(c.where); if (i < 0) continue;
+        txt = txt.slice(0, i) + c.fix + txt.slice(i + c.where.length); changes.push({ page: pg.n, where: c.where, fix: c.fix });
+      }
+      out.push(changes.length > n0 ? { n: pg.n, md: fromEdit(txt) } : pg);
+    } catch (e) { error = e.message; stop = true; out.push(pg); }
+  }
+  if (changes.length) {
+    it.md = (marks ? out.map(p => `<!-- Trang ${p.n} -->\n\n${p.md}`).join('\n\n') : out[0].md).trim() + '\n';
+    it.ui.ta.value = toEdit(it.md); refreshPreview(it); showNd(it);
+  }
+  it.fixLog = [...(it.fixLog || []), ...changes]; renderFixLog(it);
+  return { applied: changes.length, error };
+}
+function renderFixLog(it) {
+  const box = it.ui.review; box.className = ''; box.innerHTML = '';
+  if (!it.fixLog || !it.fixLog.length) { box.className = 'hidden'; return; }
+  box.append(el('div', { class: 'msg' }, `AI đã sửa ${it.fixLog.length} chỗ (Tesseract → AI). Xem lại cho chắc:`),
+    el('div', { class: 'acts' }, el('button', { onclick: () => { it.md = it.mdBeforeAI; it.fixLog = []; it.mdBeforeAI = null; it.ui.ta.value = toEdit(it.md); refreshPreview(it); showNd(it); renderFixLog(it); } }, '↩ Hoàn tác tất cả sửa của AI')));
+  it.fixLog.forEach(c => box.append(el('div', { class: 'rv' }, el('div', {}, `Tr.${c.page} · `, el('code', {}, c.where), ' → ', el('code', {}, c.fix)))));
 }
