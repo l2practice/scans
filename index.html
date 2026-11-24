@@ -124,6 +124,7 @@ body{background:radial-gradient(ellipse at 50% -15%,color-mix(in srgb,#f4b07a 12
 html[data-theme="dark"] body{background:radial-gradient(ellipse at 50% -15%,#512a1d 0%,#211815 30%,var(--bg) 68%)}
 .wrap{max-width:1040px;padding:38px 24px 100px}
 h1{font-size:clamp(28px,4vw,36px);font-weight:700;letter-spacing:-.045em;line-height:1.12;margin:0 0 10px;display:flex;align-items:center;gap:13px}
+.brand-mark .tile{fill:var(--accent)}.brand-mark .glyph{stroke:var(--accent-ink)}
 .brand-mark{display:block;width:46px;height:46px;flex:none;filter:drop-shadow(0 6px 10px color-mix(in srgb,var(--accent) 20%,transparent))}
 .sub{max-width:800px;font-size:15px;line-height:1.7;margin:0 0 26px;padding-left:59px}
 .card{border-radius:22px;padding:22px;margin-bottom:16px;box-shadow:0 8px 28px rgba(32,31,50,.045);border-color:color-mix(in srgb,var(--line) 82%,transparent)}
@@ -271,7 +272,7 @@ html[data-theme="dark"] .source-pane{background:#26201d}
       <svg viewBox="0 0 48 32" role="img" aria-label="Language"><path d="M3 6h16M11 6v4M5 11h13M7 11c2 7 6 11 12 14M19 11c-2 7-6 11-12 14M27 25l7-18h3l8 18M30 19h12"/></svg><span id="langCode" class="lang-code">VI</span>
     </button>
   </div>
-  <h1><svg class="brand-mark" viewBox="0 0 64 64" role="img" aria-label="Biểu tượng quét tài liệu" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#5661E0"/><g transform="translate(3.27 3.13) scale(2.4)" fill="none" stroke="#fff" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8.5V6.5A2 2 0 0 1 6.5 4.5H8.5M15.5 4.5H17.5A2 2 0 0 1 19.5 6.5V8.5M19.5 15.5V17.5A2 2 0 0 1 17.5 19.5H15.5M8.5 19.5H6.5A2 2 0 0 1 4.5 17.5V15.5"/><path d="M3.5 12H20.5"/><path d="M8.5 8.8H15.5M8.5 15.2H13.5"/></g></svg>DocConverter</h1>
+  <h1><svg class="brand-mark" viewBox="0 0 64 64" role="img" aria-label="Biểu tượng quét tài liệu" xmlns="http://www.w3.org/2000/svg"><rect class="tile" width="64" height="64" rx="14"/><g class="glyph" transform="translate(3.27 3.13) scale(2.4)" fill="none" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8.5V6.5A2 2 0 0 1 6.5 4.5H8.5M15.5 4.5H17.5A2 2 0 0 1 19.5 6.5V8.5M19.5 15.5V17.5A2 2 0 0 1 17.5 19.5H15.5M8.5 19.5H6.5A2 2 0 0 1 4.5 17.5V15.5"/><path d="M3.5 12H20.5"/><path d="M8.5 8.8H15.5M8.5 15.2H13.5"/></g></svg>DocConverter</h1>
   <p class="sub">Chuyển PDF, Word, Excel, PowerPoint, HTML, EPUB, ZIP, ảnh… sang Markdown / Word / HTML / TXT / JSON / Excel. PDF scan hoặc ảnh chụp công văn sẽ tự OCR (tiếng Việt). Xử lý ngay trong trình duyệt.</p>
 
   <div id="drop">
