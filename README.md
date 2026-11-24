@@ -5,8 +5,9 @@ Chạy 100% trong trình duyệt (không server, không gửi file đi đâu). T
 
 ## Chạy thử
 ```bash
-cd doc-converter && python3 -m http.server 8000   # rồi mở http://localhost:8000
+python3 -m http.server 8000
 ```
+Chạy lệnh từ thư mục repo `scans` (cùng cấp với `index.html`, `app.js` và thư mục `libs`), sau đó mở http://localhost:8000. Nếu chạy server từ repo cha, mở http://localhost:8000/scans/.
 (Không mở bằng file:// vì trình duyệt chặn Web Worker.)
 
 ## Deploy GitHub Pages
