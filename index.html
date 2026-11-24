@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2457d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>DocConverter – Chuyển đổi tài liệu &amp; OCR</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --ink:#1c2230; --muted:#667085; --line:#e3e6ec;
+  --accent:#2457d6; --accent-ink:#fff; --ok:#0f8a4b; --warn:#b26a00; --err:#c0302b; --code:#f1f3f7;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#12151c;--card:#1b2029;--ink:#e8ebf2;--muted:#9aa3b5;--line:#2c3340;--accent:#6b93ff;--accent-ink:#0b1020;--ok:#43c985;--warn:#f0a93b;--err:#ff7a73;--code:#232a36}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 90px}
+h1{font-size:22px;margin:0 0 2px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+label.f{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px}
+select,button,textarea,input[type=text],input[type=password]{font:inherit;color:inherit}
+select,input[type=text],input[type=password]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.chk input{margin-top:4px;width:18px;height:18px;flex:none}
+.chk small{display:block;color:var(--muted)}
+details.card>summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.card>summary::after{content:"▾";color:var(--muted)}
+details.card[open]>summary{margin-bottom:14px}
+#drop{border:2px dashed var(--line);border-radius:12px;padding:26px 16px;text-align:center;transition:.15s;background:var(--card)}
+#drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--card))}
+#drop b{font-size:16px}
+#drop p{margin:6px 0 14px;color:var(--muted);font-size:13.5px}
+.big{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+button{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:38px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.lg{padding:12px 20px;font-size:16px;font-weight:600;min-height:48px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+.bar .sp{flex:1}
+.file-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.file-h .name{font-weight:600;word-break:break-all;flex:1;min-width:160px}
+.badge{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.badge.ok{color:var(--ok);border-color:var(--ok)} .badge.warn{color:var(--warn);border-color:var(--warn)} .badge.err{color:var(--err);border-color:var(--err)}
+.prog{height:6px;background:var(--code);border-radius:99px;overflow:hidden;margin:10px 0 2px}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.msg{font-size:13px;color:var(--muted);min-height:18px}
+.msg.err{color:var(--err)} .msg.warn{color:var(--warn)}
+.tabs{display:flex;gap:4px;margin:12px 0 8px}
+.tabs button{padding:5px 12px;min-height:34px}
+.tabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+textarea.src{width:100%;min-height:340px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:13.5px/1.5 ui-monospace,Menlo,Consolas,monospace}
+iframe.pv{width:100%;height:440px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hidden{display:none!important}
+footer{color:var(--muted);font-size:12.5px;margin-top:20px}
+.aihead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.aihelp{font-size:12.5px;color:var(--muted);margin-top:10px}
+.aihelp a{color:var(--accent)}
+.row{display:flex;gap:6px}.row button{min-width:44px;padding:6px}
+.tabs{flex-wrap:wrap;align-items:center}.tabs .sp2{flex:1}
+.tabs button.dl{font-size:13px;padding:4px 10px;min-height:32px}
+.rv{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13.5px}.rv.done{opacity:.5}.rv code{background:var(--code);padding:1px 5px;border-radius:4px;word-break:break-all}.rv .r2{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.rv .r2 button{min-height:30px;padding:3px 10px;font-size:13px}
+iframe.sum{width:100%;height:620px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:10px}
+
+/* Camera */
+#cam{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
+#cam video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+#cam .guide{position:absolute;inset:8% 6% 22% 6%;border:2px dashed rgba(255,255,255,.55);border-radius:10px;pointer-events:none}
+#cam .ctl{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:rgba(0,0,0,.85)}
+#cam .ctl button{background:#222;color:#fff;border-color:#444;min-width:84px}
+#cam .shutter{width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:#e33;padding:0;min-width:0!important}
+#cam .shutter:active{transform:scale(.92)}
+#cam .cnt{position:absolute;top:calc(12px + env(safe-area-inset-top));left:0;right:0;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}
+#cam .thumb{width:48px;height:48px;border-radius:6px;object-fit:cover;border:2px solid #fff}
+#cam .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#cam .flash.on{animation:fl .25s}
+@keyframes fl{0%{opacity:.8}100%{opacity:0}}
+
+@media (max-width:640px){
+  .wrap{padding:14px 12px 100px}
+  h1{font-size:20px}
+  .card{padding:12px}
+  #drop b{display:none}
+  #drop{padding:16px 12px}
+  .big button{flex:1 1 100%}
+  textarea.src{min-height:300px;font-size:14px}
+  iframe.pv{height:380px}
+  .acts button{flex:1 1 45%}
+  .acts button.primary{flex:1 1 100%}
+  .bar{position:fixed;left:0;right:0;bottom:0;margin:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--line);z-index:20}
+  .bar .sp{display:none}
+  .bar .msg{width:100%;order:-1}
+  .bar button{flex:1}
+  select,input[type=text],input[type=password]{font-size:16px} /* tránh iOS tự zoom */
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DocConverter</h1>
+  <p class="sub">Chuyển PDF, Word, Excel, PowerPoint, HTML, EPUB, ZIP, ảnh… sang Markdown / Word / HTML / TXT / JSON / Excel. PDF scan hoặc ảnh chụp công văn sẽ tự OCR (tiếng Việt). Xử lý ngay trong trình duyệt.</p>
+
+  <div id="drop">
+    <b>Kéo thả file vào đây</b>
+    <p>pdf · docx · xlsx/xls/csv · pptx · html · epub · zip · json/xml/ipynb · txt/md · jpg/png/webp…<br>Có thể chọn nhiều file / nhiều ảnh cùng lúc.</p>
+    <div class="big">
+      <button class="primary lg" id="camBtn">📷 Quét bằng camera</button>
+      <button class="lg" id="pickBtn">📁 Chọn file</button>
+    </div>
+    <input id="pick" type="file" multiple hidden>
+    <input id="camNative" type="file" accept="image/*" capture="environment" hidden>
+  </div>
+
+  <div class="card" id="aiCard" style="margin-top:14px">
+    <div class="aihead"><b>🤖 AI – chính xác hơn, đọc được chữ viết tay, tóm tắt trực quan</b><span class="badge" id="aiState">Đang tắt</span></div>
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label class="f" for="engine">Công cụ OCR &amp; AI</label>
+        <select id="engine">
+          <option value="tess" selected>Tesseract (offline, miễn phí, chỉ chữ in)</option>
+          <option value="gemini">AI – Google Gemini</option>
+          <option value="claude">AI – Claude (Anthropic)</option>
+        </select>
+      </div>
+      <div class="aiF"><label class="f" for="aiKey">API key</label>
+        <div class="row"><input id="aiKey" type="password" autocomplete="off" placeholder="Dán API key vào đây"><button id="aiShow" type="button" title="Hiện/ẩn key">👁</button></div></div>
+      <div class="aiF"><label class="f" for="aiModel">Chọn model AI (tự tải danh sách khi có key)</label><div class="row"><select id="aiModel"></select><button id="aiList" type="button" title="Tải lại danh sách model">↻</button></div></div>
+      <div class="aiF"><label class="f">&nbsp;</label><button id="aiTest" type="button" style="width:100%">Kiểm tra key</button></div>
+    </div>
+    <div class="aiF aihelp">Lấy key: <b>Gemini</b> → <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (có gói miễn phí) · <b>Claude</b> → <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+      Key chỉ lưu trong trình duyệt này và gửi thẳng tới nhà cung cấp. Khi dùng AI, ảnh/văn bản được gửi lên máy chủ của họ – đừng dùng cho văn bản mật.</div>
+    <div class="aihelp" id="aiOff">Chưa bật AI: app dùng Tesseract (chỉ chữ in). Chọn Gemini hoặc Claude rồi dán API key để đọc chữ viết tay, OCR chính xác hơn và dùng nút “Tóm tắt trực quan”.</div>
+  </div>
+
+  <details class="card" id="settings" style="margin-top:14px">
+    <summary>Tuỳ chọn</summary>
+    <div class="grid">
+      <div>
+        <label class="f" for="fmt">Định dạng khác (ngoài 2 nút Word)</label>
+        <select id="fmt">
+          <option value="mdraw" selected>Markdown thuần (.md)</option>
+          <option value="md">Markdown có format (.md)</option>
+          <option value="txt">Văn bản thuần (.txt)</option>
+          <option value="html">HTML (.html)</option>
+          <option value="json">JSON (.json)</option>
+          <option value="xlsx">Excel – các bảng (.xlsx)</option>
+          <option value="csv">CSV – các bảng (.csv)</option>
+        </select>
+      </div>
+      <div id="ndBox">
+        <label class="f" for="ndSz">Cỡ chữ nội dung (Word chuẩn thể thức)</label>
+        <select id="ndSz">
+          <option value="27" selected>13,5 pt · giãn dòng 1,35 (mẫu Báo cáo, Biên bản)</option>
+          <option value="28">14 pt · giãn dòng 1,15 (mẫu Chỉ thị)</option>
+          <option value="26">13 pt · giãn dòng 1,2</option>
+        </select>
+      </div>
+      <div>
+        <label class="f" for="docKind">Loại tài liệu</label>
+        <select id="docKind">
+          <option value="official" selected>Văn bản hành chính (công văn, quyết định…)</option>
+          <option value="free">Ghi chú / bài giải / sơ đồ viết tay</option>
+        </select>
+      </div>
+      <div>
+        <label class="f" for="ocrMode">Chế độ PDF</label>
+        <select id="ocrMode">
+          <option value="auto" selected>Tự động (trang không có chữ → OCR)</option>
+          <option value="force">Luôn OCR mọi trang</option>
+          <option value="off">Không OCR (chỉ lấy lớp chữ có sẵn)</option>
+        </select>
+      </div>
+      <div id="langBox">
+        <label class="f" for="lang">Ngôn ngữ OCR (Tesseract)</label>
+        <select id="lang">
+          <option value="vie+eng" selected>Tiếng Việt + English</option>
+          <option value="vie">Tiếng Việt</option>
+          <option value="eng">English</option>
+        </select>
+      </div>
+    </div>
+
+
+    <div class="grid" style="margin-top:14px">
+      <label class="chk"><input type="checkbox" id="layout" checked><span>Giữ bố cục văn bản hành chính<small>Căn giữa/phải/đều, thụt đầu dòng, bảng 2 cột quốc hiệu – cơ quan, in đậm, ngắt trang. Tắt nếu muốn Markdown thuần.</small></span></label>
+      <label class="chk"><input type="checkbox" id="tables" checked><span>Dò bảng có đường kẻ (Tesseract)<small>Tự tìm khung bảng, OCR từng ô, nhận diện ô gộp. Bảng lớn nên dùng AI.</small></span></label>
+      <label class="chk"><input type="checkbox" id="pre" checked><span>Làm sạch ảnh trước khi OCR<small>Khử bóng, tăng tương phản, loại dấu đỏ (Tesseract).</small></span></label>
+      <label class="chk"><input type="checkbox" id="keepBr"><span>Giữ nguyên ngắt dòng<small>Tắt thì các dòng được gộp thành đoạn.</small></span></label>
+      <label class="chk"><input type="checkbox" id="embed"><span>Chèn ảnh gốc vào cuối file Word<small>Hữu ích với sơ đồ, hình vẽ, chữ viết tay (giữ lại bản gốc để đối chiếu).</small></span></label>
+      <label class="chk"><input type="checkbox" id="merge"><span>Gộp các ảnh được chọn thành 1 tài liệu<small>Mỗi ảnh là một trang (sắp theo tên file).</small></span></label>
+    </div>
+  </details>
+
+  <div class="bar hidden" id="bar">
+    <span class="msg" id="sum"></span>
+    <span class="sp"></span>
+    <button id="clear">Xoá danh sách</button>
+    <button id="dlAll" class="primary" disabled>Tải tất cả (.zip)</button>
+  </div>
+
+  <div id="list"></div>
+
+  <footer>
+    Lần OCR đầu tiên sẽ nạp mô hình (chạy offline sau đó). Kết quả OCR luôn cần đọc soát lại: sửa trực tiếp trong khung văn bản trước khi tải xuống.
+  </footer>
+</div>
+
+<div id="cam" class="hidden">
+  <div class="cnt" id="camCnt">Đặt tài liệu vào khung, giữ máy thẳng và đủ sáng</div>
+  <video id="camVideo" playsinline muted autoplay></video>
+  <div class="guide"></div><div class="flash" id="camFlash"></div>
+  <div class="ctl">
+    <button id="camClose">Huỷ</button>
+    <img class="thumb hidden" id="camThumb" alt="">
+    <button class="shutter" id="camShot" aria-label="Chụp"></button>
+    <button id="camDone" class="primary" disabled>Xong</button>
+  </div>
+</div>
+
+<script src="libs/pdf.min.js"></script>
+<script src="libs/tess/tesseract.min.js"></script>
+<script src="libs/mammoth.browser.min.js"></script>
+<script src="libs/turndown.browser.umd.js"></script>
+<script src="libs/turndown-plugin-gfm.js"></script>
+<script src="libs/xlsx.full.min.js"></script>
+<script src="libs/jszip.min.js"></script>
+<script src="libs/marked.min.js"></script>
+<script src="libs/docx.umd.js"></script>
+<script src="tables.js"></script>
+<script src="nd30.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
