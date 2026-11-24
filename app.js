@@ -801,10 +801,10 @@ async function convertFile(file, ctx) {
 
 /* ================= Xuất file ================= */
 function sanitize(doc) {
-  doc.querySelectorAll('script,iframe,object,embed,link,meta,base,form').forEach(n => n.remove());
+  doc.querySelectorAll('script,style,iframe,object,embed,link,meta,base,form').forEach(n => n.remove());
   doc.querySelectorAll('*').forEach(n => {
     [...n.attributes].forEach(a => {
-      if (/^on/i.test(a.name) || (/^(href|src|xlink:href)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+      if (/^on/i.test(a.name) || /^style$/i.test(a.name) || (/^(href|src|xlink:href)$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
     });
   });
 }
@@ -1136,7 +1136,7 @@ function applyPlainEdit(md, oldTxt, map, newTxt) {
   if (/\n/.test(rep)) rep = rep.replace(/\n+/g, md.lastIndexOf('<p', start) > md.lastIndexOf('</p>', start) ? '<br>' : '\n\n');
   return md.slice(0, start) + rep + md.slice(end);
 }
-function refreshTa(it) { it.plain = plainMap(it.md); it.ui.ta.value = it.plain.text; it.ui.taMd.value = toEdit(it.md); }
+function refreshTa(it) { it.plain = plainMap(it.md); it.ui.ta.value = it.plain.text; it.ui.taMd.value = toEdit(it.md); if (it.ui.sourceText) it.ui.sourceText.textContent = it.plain.text; }
 function onPlainInput(it) {
   const ta = it.ui.ta, caret = ta.selectionStart, old = it.plain;
   const nm = applyPlainEdit(it.md, old.text, old.map, ta.value);
@@ -1148,12 +1148,24 @@ function onPlainInput(it) {
 function renderItem(it) {
   const ta = el('textarea', { class: 'src', spellcheck: 'false' });
   const taMd = el('textarea', { class: 'src hidden', spellcheck: 'false' });
-  ta.addEventListener('input', () => onPlainInput(it));
-  taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; refreshPreview(it); showNd(it); });
-  const pv = el('iframe', { class: 'pv hidden', sandbox: '' });
+  ta.addEventListener('input', () => { onPlainInput(it); if (it.ui?.sourceText) it.ui.sourceText.textContent = ta.value; });
+  taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; if (it.ui?.sourceText) it.ui.sourceText.textContent = ta.value; refreshPreview(it); showNd(it); });
+  const pv = el('div', { class: 'pv preview-doc hidden' });
   const tabTx = el('button', { onclick: () => tab('text') }, 'Văn bản (sửa được)');
   const tabPv = el('button', { class: 'on', onclick: () => tab('pv') }, 'Xem trước');
   const tabAdv = el('button', { onclick: () => tab('md') }, 'Markdown + bố cục');
+  const sourceImage = el('img', { class: 'source-image', alt: 'Ảnh gốc' });
+  const sourceText = el('pre', { class: 'source-ocr-text' });
+  const sourceLabel = el('span', { class: 'source-file-name' });
+  const sourceCount = el('span', { class: 'source-count' });
+  const sourcePrev = el('button', { onclick: () => showOriginal(it, -1) }, '‹ Trước');
+  const sourceNext = el('button', { onclick: () => showOriginal(it, 1) }, 'Sau ›');
+  const sourceReview = el('section', { class: 'source-review hidden' },
+    el('div', { class: 'source-review-header' }, el('h3', {}, 'Đối chiếu ảnh gốc và văn bản OCR'), el('div', { class: 'source-controls' }, sourcePrev, sourceCount, sourceNext)),
+    el('div', { class: 'source-compare-grid' },
+      el('div', { class: 'source-pane' }, el('h4', {}, 'Ảnh gốc'), sourceLabel, sourceImage),
+      el('div', { class: 'source-pane' }, el('h4', {}, 'Văn bản OCR'), sourceText)));
+  const sourceBtn = el('button', { disabled: !it.srcFiles, onclick: () => toggleOriginal(it) }, '🖼 Xem lại ảnh gốc');
   const tab = name => {
     tabTx.classList.toggle('on', name === 'text'); tabPv.classList.toggle('on', name === 'pv'); tabAdv.classList.toggle('on', name === 'md');
     ta.classList.toggle('hidden', name !== 'text'); taMd.classList.toggle('hidden', name !== 'md'); pv.classList.toggle('hidden', name !== 'pv');
@@ -1164,7 +1176,7 @@ function renderItem(it) {
     badge: el('span', { class: 'badge' }, 'Chờ'),
     bar: el('i'), msg: el('div', { class: 'msg' }),
     prog: el('div', { class: 'prog' }),
-    ta, taMd, pv, tab,
+    ta, taMd, pv, tab, sourceImage, sourceText, sourceLabel, sourceCount, sourcePrev, sourceNext, sourceReview, sourceBtn,
     dl30: el('button', { class: 'primary', onclick: () => download(it, 'docx30') }, '⬇ Word chuẩn thể thức'),
     dlRaw: el('button', { class: 'primary', onclick: () => download(it, 'docx') }, '⬇ Word gốc (raw)'),
     dl: el('button', { onclick: () => download(it, curFmt()) }, 'Tải xuống'),
@@ -1187,9 +1199,9 @@ function renderItem(it) {
     el('div', { class: 'quick-actions' }, it.ui.cpTxt, it.ui.dlMdRaw, it.ui.dlMdFmt));
   const viewPanel = el('section', { class: 'quick-panel quick-view' },
     el('h3', {}, '◉ Chế độ xem'),
-    el('div', { class: 'tabs view-tabs' }, tabTx, tabPv, tabAdv));
+    el('div', { class: 'tabs view-tabs' }, tabTx, tabPv, tabAdv, sourceBtn));
   const documentPanel = el('main', { class: 'document-panel' },
-    el('div', { class: 'document-canvas' }, ta, taMd, pv), it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum);
+    el('div', { class: 'document-canvas' }, ta, taMd, pv), sourceReview, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum);
   const sidebar = el('aside', { class: 'action-sidebar' },
     el('section', { class: 'side-section ai-section' },
       el('h3', {}, '✨ Xử lý & AI'),
@@ -1199,7 +1211,7 @@ function renderItem(it) {
       el('div', { class: 'side-actions' },
         ...(it.srcFiles ? [it.ui.dlImg] : []),
         el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, '↻ Chuyển lại'),
-        el('button', { class: 'danger', onclick: () => { items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, '⌫ Xoá'))));
+        el('button', { class: 'danger', onclick: () => { if (it.ui.sourceUrl) URL.revokeObjectURL(it.ui.sourceUrl); items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, '⌫ Xoá'))));
   const exportPanel = el('section', { class: 'export-panel' },
     el('h3', {}, '↓ Xuất file'),
     el('div', { class: 'export-actions' },
@@ -1215,9 +1227,33 @@ function renderItem(it) {
     it.ui.prog, it.ui.msg, it.ui.result);
 }
 function flash(it, t) { const m = it.ui.msg, o = m.textContent, c = m.className; m.className = 'msg'; m.textContent = t; setTimeout(() => { m.textContent = o; m.className = c; }, 1500); }
+function originalPages(it) {
+  if (it.srcFiles?.length) return it.srcFiles.map(file => ({ label: file.name, blob: file }));
+  if (it.pagePics) return Object.entries(it.pagePics).sort((a,b) => Number(a[0])-Number(b[0])).map(([n,p]) => ({ label: `Trang ${n}`, blob: new Blob([p.data], { type: 'image/jpeg' }) }));
+  return [];
+}
+function showOriginal(it, delta = 0) {
+  const u = it.ui, pages = originalPages(it); if (!pages.length) return;
+  u.sourceIndex = ((u.sourceIndex || 0) + delta + pages.length) % pages.length;
+  const item = pages[u.sourceIndex];
+  if (u.sourceUrl) URL.revokeObjectURL(u.sourceUrl);
+  u.sourceUrl = URL.createObjectURL(item.blob); u.sourceImage.src = u.sourceUrl;
+  u.sourceLabel.textContent = item.label; u.sourceText.textContent = u.ta.value;
+  u.sourceCount.textContent = `${u.sourceIndex + 1} / ${pages.length}`;
+  u.sourcePrev.disabled = pages.length < 2; u.sourceNext.disabled = pages.length < 2;
+}
+function toggleOriginal(it) {
+  const u = it.ui, opening = u.sourceReview.classList.contains('hidden');
+  u.sourceReview.classList.toggle('hidden', !opening); u.sourceBtn.classList.toggle('on', opening);
+  if (opening) { showOriginal(it); u.sourceReview.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  else if (u.sourceUrl) { URL.revokeObjectURL(u.sourceUrl); u.sourceUrl = null; }
+}
 function refreshPreview(it, now) {
   if (!now && it.ui.pv.classList.contains('hidden')) return;
-  try { it.ui.pv.srcdoc = htmlString(it.md, it.file.name); } catch (e) { it.ui.pv.srcdoc = '<p>' + e.message + '</p>'; }
+  try {
+    const doc = mdToDom(it.md), body = el('div', { class: 'preview-content' });
+    body.innerHTML = doc.body.innerHTML; it.ui.pv.replaceChildren(body);
+  } catch (e) { it.ui.pv.textContent = e.message; }
 }
 function sync(it) {
   const u = it.ui, s = it.status;
@@ -1225,8 +1261,9 @@ function sync(it) {
   u.badge.textContent = { wait: 'Chờ', run: 'Đang xử lý', done: 'Xong', error: 'Lỗi' }[s];
   u.prog.classList.toggle('hidden', s !== 'run');
   u.result.classList.toggle('hidden', s !== 'done');
+  if (u.sourceBtn) u.sourceBtn.disabled = !originalPages(it).length;
   if (s === 'done') {
-    refreshTa(it); refreshPreview(it, true); showNd(it); u.msg.className = 'msg' + (it.warn ? ' warn' : '');
+    refreshTa(it); refreshPreview(it, true); if (!u.sourceReview.classList.contains('hidden')) showOriginal(it); showNd(it); u.msg.className = 'msg' + (it.warn ? ' warn' : '');
     if (it.focus) { it.focus = false; it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     u.msg.textContent = [it.info, it.warn].filter(Boolean).join(' — ');
   }
