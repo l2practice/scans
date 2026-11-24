@@ -216,19 +216,19 @@ function ocrLines(paras, clean) {
   // clean: loại từ/dòng "rác" do chữ ký, con dấu, hình, đường kẻ bị đọc nhầm thành chữ (độ tin cậy thấp, toàn ký hiệu, ký tự lẻ)
   const okWord = w => {
     const t = (w.text || '').trim(); if (!t) return false; if (!clean) return true;
-    if (!t.replace(/[^\p{L}\p{N}]/gu, '').length) return w.confidence >= 50 && /^[-–—/.,:;()]$/.test(t); // giữ dấu gạch/ngắt câu đứng riêng nếu đọc chắc
-    if (w.confidence < 40 && !/^[\d.,/%()-]+$/.test(t)) return false;
-    if (t.length <= 1 && w.confidence < 70 && !/\d/.test(t)) return false;
-    return true;
+    const alnum = t.replace(/[^\p{L}\p{N}]/gu, '').length;
+    if (!alnum) return w.confidence >= 50 && /^[-–—/.,:;()]$/.test(t);   // ký hiệu lẻ: chỉ giữ dấu gạch/ngắt câu đọc chắc
+    if (w.confidence < 20 && alnum <= 3 && !/^\d+$/.test(t)) return false; // mảnh vụn độ tin cậy rất thấp
+    return true;                                                           // chữ cái / chữ số đơn lẻ (a, I…) luôn giữ
   };
   const raw = [];
   paras.forEach((p, pi) => (p.lines || []).forEach((l, li) => {
     const all = (l.words || []).filter(w => (w.text || '').trim());
     const ws = all.filter(okWord).sort((a, b) => a.bbox.x0 - b.bbox.x0);
-    if (clean && all.length && (!ws.length || (ws.length <= 2 && all.length - ws.length > ws.length))) return;
+    if (clean && all.length && (!ws.length || (ws.length <= 1 && all.length - ws.length >= 2))) return;
     const t = (clean && all.length ? ws.map(w => w.text.trim()).join(' ') : (l.text || '')).trim();
     if (t.replace(/[^\p{L}\p{N}]/gu, '').length < 2) return;
-    if (l.confidence < (clean ? 55 : 35) && t.replace(/\s/g, '').length < (clean ? 14 : 12)) return;
+    if (l.confidence < (clean ? 45 : 35) && t.replace(/\s/g, '').length < 12) return;
     const bb = l.bbox;
     raw.push({ y0: bb.y0, y1: bb.y1, first: li === 0 && pi > 0, l, t, ws, bb });
   }));
@@ -468,9 +468,21 @@ async function ocrCanvas(cv, opts) {
   }
   const { data } = await worker.recognize(work);
   if (work !== cv) work.width = 0;
-  const blocks = (data.blocks || []).filter(b => !(opts.clean && /IMAGE|NOISE|LINE/i.test(b.blocktype || ''))); // bỏ vùng Tesseract nhận ra là hình/nhiễu/đường kẻ
-  const paras = blocks.length ? blocks.flatMap(b => b.paragraphs || []) : (data.paragraphs || []);
-  const lines = ocrLines(paras, opts.clean), lo = { rich: opts.layout, keepBr: opts.keepBr, boldCaps: true };
+  const allParas = (data.blocks || []).length ? data.blocks.flatMap(b => b.paragraphs || []) : (data.paragraphs || []);
+  const junkBlock = b => { // vùng Tesseract nhận là hình/nhiễu/đường kẻ VÀ nội dung đúng là rác (độ tin cậy thấp / ít chữ cái)
+    if (!/IMAGE|NOISE|LINE/i.test(b.blocktype || '')) return false;
+    const ws = (b.paragraphs || []).flatMap(p => (p.lines || []).flatMap(l => l.words || [])), txt = ws.map(w => w.text).join('');
+    const letters = txt.replace(/[^\p{L}\p{N}]/gu, '').length, mean = ws.length ? ws.reduce((a, w) => a + w.confidence, 0) / ws.length : 0;
+    return mean < 55 || letters < txt.length * 0.5 || letters < 6;
+  };
+  const paras = opts.clean && (data.blocks || []).length ? data.blocks.filter(b => !junkBlock(b)).flatMap(b => b.paragraphs || []) : allParas;
+  let lines = ocrLines(paras, opts.clean);
+  if (opts.clean) { // van an toàn: nếu lọc làm mất >15% chữ so với không lọc thì coi là lọc quá tay → giữ bản không lọc
+    const cnt = ls => ls.reduce((a, l) => a + l.segs.reduce((b, sg) => b + sg.t.replace(/[^\p{L}\p{N}]/gu, '').length, 0), 0);
+    const base = ocrLines(allParas, false);
+    if (cnt(lines) < cnt(base) * 0.85) lines = base;
+  }
+  const lo = { rich: opts.layout, keepBr: opts.keepBr, boldCaps: true };
   const lay = ls => ls.length ? layoutToMd(ls, cv.width, lo) : '';
   let md;
   if (!tables.length) {
@@ -1471,7 +1483,7 @@ async function reviewIt(it) {
 function fixPrompt(hasImg) {
   return 'Bạn là bộ sửa lỗi OCR cho văn bản tiếng Việt. ' + (hasImg ? 'Hãy đối chiếu ẢNH GỐC với VĂN BẢN OCR (do Tesseract đọc) bên dưới. ' : 'Không có ảnh gốc; chỉ sửa những lỗi hiển nhiên theo ngữ cảnh. ') +
     'CHỈ trả về một mảng JSON các chỗ cần sửa, mỗi phần tử {"where":"trích NGUYÊN VĂN đoạn sai (≤80 ký tự, đủ dài để không trùng chỗ khác)","fix":"đúng đoạn đó sau khi sửa theo ảnh"}. ' +
-    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung. Nếu một đoạn OCR là RÁC do chữ ký, con dấu, hình vẽ, logo, đường kẻ hoặc vùng không phải chữ (không có chữ tương ứng trong ảnh) thì xoá nó (fix để rỗng), KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
+    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung. Nếu một đoạn OCR là RÁC do chữ ký, con dấu, hình vẽ, logo, đường kẻ hoặc vùng không phải chữ (không có chữ tương ứng trong ảnh) thì xoá nó (fix để rỗng), KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Nếu văn bản OCR bị THIẾU hẳn một dòng/đoạn so với ảnh, dùng where = dòng liền trước chỗ thiếu và fix = dòng đó + xuống dòng + phần còn thiếu. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
 }
 function parseJsonArray(raw) { try { const a = raw.indexOf('['), b = raw.lastIndexOf(']'); const v = JSON.parse(raw.slice(a, b + 1)); return Array.isArray(v) ? v : []; } catch { return []; } }
 async function aiFixIt(it, o, onProg) {
