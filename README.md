@@ -40,3 +40,7 @@ Chọn Gemini/Claude, dán API key, bấm "Kiểm tra key". Dùng cho: OCR chín
 
 ## Cách dùng AI tiết kiệm token
 Mặc định ("Tesseract đọc trước, AI chỉ sửa chỗ sai"): Tesseract OCR cả file (nhanh, miễn phí), sau đó AI nhận ảnh + văn bản và chỉ trả về danh sách chỗ cần sửa (JSON nhỏ), app tự áp dụng và liệt kê để bạn xem/hoàn tác. Chọn "AI đọc toàn bộ" nếu cần đọc chữ viết tay (tài liệu viết tay luôn dùng AI đọc toàn bộ).
+
+## Khung "Văn bản (sửa được)" và lọc chữ rác
+- Tab "Văn bản" chỉ hiển thị chữ thuần (không ký hiệu); sửa ở đây được ánh xạ ngược vào bản có định dạng nên Word/Markdown có format vẫn giữ căn lề, bảng, in đậm. Ký hiệu bố cục nằm ở tab "Markdown + bố cục".
+- "Lọc chữ rác ở vùng không phải chữ": bỏ vùng Tesseract nhận là hình/nhiễu/đường kẻ, từ có độ tin cậy thấp, ký hiệu lẻ; loại mực xanh và dấu đỏ khi làm sạch ảnh; AI sửa lỗi cũng xoá đoạn rác.

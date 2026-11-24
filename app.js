@@ -63,13 +63,13 @@ async function getWorker(lang) {
 }
 
 /* Khử bóng (ngưỡng thích nghi) + loại dấu đỏ để OCR công văn chụp bằng điện thoại tốt hơn */
-function preprocess(cv) {
+function preprocess(cv, cleanInk) {
   const w = cv.width, h = cv.height, ctx = cv.getContext('2d', { willReadFrequently: true });
   const img = ctx.getImageData(0, 0, w, h), d = img.data;
   const g = new Uint8ClampedArray(w * h);
   for (let i = 0, p = 0; i < g.length; i++, p += 4) {
     const r = d[p], gg = d[p + 1], b = d[p + 2];
-    g[i] = (r > 150 && gg < 120 && b < 120) ? 255 : (0.299 * r + 0.587 * gg + 0.114 * b);
+    g[i] = ((r > 150 && gg < 120 && b < 120) || (cleanInk && b > 90 && b - Math.max(r, gg) > 40)) ? 255 : (0.299 * r + 0.587 * gg + 0.114 * b); // xoá dấu đỏ (và mực xanh chữ ký nếu bật lọc)
   }
   const W = w + 1, S = new Uint32Array(W * (h + 1));
   for (let y = 1; y <= h; y++) {
@@ -212,18 +212,31 @@ function layoutToMd(lines, W, o) {
 }
 
 /* Dòng từ Tesseract → cấu trúc chung (tách cột theo khoảng trống lớn giữa các từ) */
-function ocrLines(paras) {
+function ocrLines(paras, clean) {
+  // clean: loại từ/dòng "rác" do chữ ký, con dấu, hình, đường kẻ bị đọc nhầm thành chữ (độ tin cậy thấp, toàn ký hiệu, ký tự lẻ)
+  const okWord = w => {
+    const t = (w.text || '').trim(); if (!t) return false; if (!clean) return true;
+    if (!t.replace(/[^\p{L}\p{N}]/gu, '').length) return w.confidence >= 50 && /^[-–—/.,:;()]$/.test(t); // giữ dấu gạch/ngắt câu đứng riêng nếu đọc chắc
+    if (w.confidence < 40 && !/^[\d.,/%()-]+$/.test(t)) return false;
+    if (t.length <= 1 && w.confidence < 70 && !/\d/.test(t)) return false;
+    return true;
+  };
   const raw = [];
   paras.forEach((p, pi) => (p.lines || []).forEach((l, li) => {
-    const t = (l.text || '').trim(); if (t.replace(/[^\p{L}\p{N}]/gu, '').length < 2) return;
-    if (l.confidence < 35 && t.replace(/\s/g, '').length < 12) return; // rác: nhiễu, viền dấu
-    raw.push({ y0: l.bbox.y0, y1: l.bbox.y1, first: li === 0 && pi > 0, l, t });
+    const all = (l.words || []).filter(w => (w.text || '').trim());
+    const ws = all.filter(okWord).sort((a, b) => a.bbox.x0 - b.bbox.x0);
+    if (clean && all.length && (!ws.length || (ws.length <= 2 && all.length - ws.length > ws.length))) return;
+    const t = (clean && all.length ? ws.map(w => w.text.trim()).join(' ') : (l.text || '')).trim();
+    if (t.replace(/[^\p{L}\p{N}]/gu, '').length < 2) return;
+    if (l.confidence < (clean ? 55 : 35) && t.replace(/\s/g, '').length < (clean ? 14 : 12)) return;
+    const bb = l.bbox;
+    raw.push({ y0: bb.y0, y1: bb.y1, first: li === 0 && pi > 0, l, t, ws, bb });
   }));
   if (!raw.length) return [];
   const medH = median(raw.map(r => r.y1 - r.y0)) || 30;
   raw.forEach(r => {
-    const ws = (r.l.words || []).filter(w => w.text && w.text.trim()).sort((a, b) => a.bbox.x0 - b.bbox.x0);
-    if (!ws.length) { r.segs = [{ t: r.t, x0: r.l.bbox.x0, x1: r.l.bbox.x1 }]; return; }
+    const ws = clean ? r.ws : (r.l.words || []).filter(w => w.text && w.text.trim()).sort((a, b) => a.bbox.x0 - b.bbox.x0);
+    if (!ws.length) { r.segs = [{ t: r.t, x0: r.bb.x0, x1: r.bb.x1 }]; return; }
     const segs = []; let cur = null;
     for (const w of ws) {
       if (cur && w.bbox.x0 - cur.x1 > medH * 2.5) { segs.push(cur); cur = null; }
@@ -445,7 +458,7 @@ const useAiOcr = opts => opts.engine !== 'tess' && (opts.aiMode === 'full' || op
 async function ocrCanvas(cv, opts) {
   if (useAiOcr(opts)) return aiOcr(cv, opts);
   const tables = opts.tables ? TBL.detect(cv) : []; // dò khung bảng trên ảnh gốc (trước khi nhị phân hoá)
-  if (opts.pre) preprocess(cv);
+  if (opts.pre) preprocess(cv, opts.clean);
   const worker = await getWorker(opts.lang);
   let work = cv;
   if (tables.length) { // làm trắng vùng bảng để OCR phần chữ còn lại; bảng sẽ OCR theo từng ô
@@ -455,8 +468,9 @@ async function ocrCanvas(cv, opts) {
   }
   const { data } = await worker.recognize(work);
   if (work !== cv) work.width = 0;
-  const paras = data.paragraphs || (data.blocks || []).flatMap(b => b.paragraphs || []);
-  const lines = ocrLines(paras), lo = { rich: opts.layout, keepBr: opts.keepBr, boldCaps: true };
+  const blocks = (data.blocks || []).filter(b => !(opts.clean && /IMAGE|NOISE|LINE/i.test(b.blocktype || ''))); // bỏ vùng Tesseract nhận ra là hình/nhiễu/đường kẻ
+  const paras = blocks.length ? blocks.flatMap(b => b.paragraphs || []) : (data.paragraphs || []);
+  const lines = ocrLines(paras, opts.clean), lo = { rich: opts.layout, keepBr: opts.keepBr, boldCaps: true };
   const lay = ls => ls.length ? layoutToMd(ls, cv.width, lo) : '';
   let md;
   if (!tables.length) {
@@ -1024,7 +1038,7 @@ function toPlainMd(md) { // Markdown thuần: bỏ thẻ HTML bố cục, bảng
 const items = []; let running = false, uid = 0;
 const getOpts = () => ({
   ocrMode: $('#ocrMode').value, lang: $('#lang').value, pre: $('#pre').checked, keepBr: $('#keepBr').checked,
-  tables: $('#tables').checked, aiMode: $('#aiMode').value, kind: $('#docKind').value, embed: $('#embed').checked, engine: $('#engine').value, layout: $('#layout').checked, aiKey: $('#aiKey').value.trim(), aiModel: $('#aiModel').value.trim(),
+  tables: $('#tables').checked, aiMode: $('#aiMode').value, clean: $('#clean').checked, kind: $('#docKind').value, embed: $('#embed').checked, engine: $('#engine').value, layout: $('#layout').checked, aiKey: $('#aiKey').value.trim(), aiModel: $('#aiModel').value.trim(),
 });
 const curFmt = () => $('#fmt').value;
 
@@ -1044,18 +1058,101 @@ function addFiles(files, o = {}) {
   $('#bar').classList.remove('hidden');
   runQueue();
 }
+
+/* ===== Khung "Văn bản": chỉ chữ thuần; mọi sửa đổi được ánh xạ ngược vào bản có định dạng (it.md) ===== */
+function plainMap(md) {
+  let out = '', i = 0, inTable = 0, pipeLine = false, atLineStart = true; const map = [], n = md.length;
+  const push = (ch, src, len) => { if (ch === '\n' && (out === '' || out.endsWith('\n\n'))) return; out += ch; map.push([src, len]); }; // gọn: tối đa 1 dòng trống liên tiếp
+  while (i < n) {
+    const c = md[i];
+    if (c === '<') {
+      if (md.startsWith('<!--', i)) { const e = md.indexOf('-->', i); i = e < 0 ? n : e + 3; continue; }
+      const m = /^<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/.exec(md.slice(i, i + 400));
+      if (m) {
+        const closing = !!m[1], tag = m[2].toLowerCase(), end = i + m[0].length;
+        if (tag === 'table') inTable += closing ? -1 : 1;
+        if (tag === 'br') push(pipeLine ? ' ' : '\n', -1, 0);
+        else if (closing && (tag === 'td' || tag === 'th')) { if (!/^\s*<\/tr>/.test(md.slice(end, end + 12))) push('\t', -1, 0); }
+        else if (closing && tag === 'tr') push('\n', -1, 0);
+        i = end; continue;
+      }
+    }
+    if (c === '&') { const m = /^&(amp|lt|gt|nbsp);/.exec(md.slice(i, i + 7)); if (m) { push({ amp: '&', lt: '<', gt: '>', nbsp: ' ' }[m[1]], i, m[0].length); i += m[0].length; atLineStart = false; continue; } }
+    if (inTable && (c === '\n' || c === '\r')) { i++; continue; }
+    if (c === '\n') { push('\n', i, 1); i++; atLineStart = true; pipeLine = false; continue; }
+    if (atLineStart) {
+      const rest = md.slice(i, i + 200); let m;
+      if ((m = /^#{1,6}[ \t]+/.exec(rest))) { i += m[0].length; atLineStart = false; continue; }
+      if (rest[0] === '|') {
+        const le = md.indexOf('\n', i), line = md.slice(i, le < 0 ? n : le);
+        if (/^\|[\s|:\-]+\|?\s*$/.test(line) && /-/.test(line)) { i += line.length + (le < 0 ? 0 : 1); continue; }
+        pipeLine = true;
+      }
+    }
+    atLineStart = false;
+    if (c === '*' && md[i + 1] === '*') { i += 2; continue; }
+    if (pipeLine && c === '|') {
+      while (out.endsWith(' ') && map[map.length - 1][0] >= 0) { out = out.slice(0, -1); map.pop(); }
+      const lead = out === '' || out.endsWith('\n'), tail = /^\|\s*(\n|$)/.test(md.slice(i, i + 60));
+      if (!lead && !tail) push('\t', -1, 0);
+      i++; while (md[i] === ' ') i++; continue;
+    }
+    if (pipeLine && c === '\\' && md[i + 1] === '|') { push('|', i, 2); i += 2; continue; }
+    push(c, i, 1); i++;
+  }
+  return { text: out, map };
+}
+function applyPlainEdit(md, oldTxt, map, newTxt) {
+  let a = 0; const L = Math.min(oldTxt.length, newTxt.length);
+  while (a < L && oldTxt[a] === newTxt[a]) a++;
+  let eo = oldTxt.length, en = newTxt.length;
+  while (eo > a && en > a && oldTxt[eo - 1] === newTxt[en - 1]) { eo--; en--; }
+  const ins = newTxt.slice(a, en), real = [];
+  for (let k = a; k < eo; k++) if (map[k][0] >= 0) real.push(k);
+  let start, end;
+  if (real.length) { start = map[real[0]][0]; const l = map[real[real.length - 1]]; end = l[0] + l[1]; }
+  else {
+    const prev = a > 0 ? map[a - 1] : null, next = a < map.length ? map[a] : null, pc = a > 0 ? oldTxt[a - 1] : '\n';
+    if (prev && prev[0] >= 0 && pc !== '\n' && pc !== '\t') start = end = prev[0] + prev[1];
+    else if (next && next[0] >= 0) start = end = next[0];
+    else if (prev && prev[0] >= 0) start = end = prev[0] + prev[1];
+    else return eo > a ? md : null;
+  }
+  const cut = md.slice(start, end);
+  if (/<\/?(t[dhr]|table|tbody|thead)\b|<!--/i.test(cut) || (/\n/.test(cut) && /^\s*\|/m.test(cut))) return null; // không sửa xuyên qua ô bảng
+  let rep = ins.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (/\n/.test(rep)) rep = rep.replace(/\n+/g, md.lastIndexOf('<p', start) > md.lastIndexOf('</p>', start) ? '<br>' : '\n\n');
+  return md.slice(0, start) + rep + md.slice(end);
+}
+function refreshTa(it) { it.plain = plainMap(it.md); it.ui.ta.value = it.plain.text; it.ui.taMd.value = toEdit(it.md); }
+function onPlainInput(it) {
+  const ta = it.ui.ta, caret = ta.selectionStart, old = it.plain;
+  const nm = applyPlainEdit(it.md, old.text, old.map, ta.value);
+  if (nm === null) { ta.value = old.text; try { ta.setSelectionRange(caret, caret); } catch { } flash(it, 'Không sửa xuyên qua nhiều ô bảng được – hãy sửa trong từng ô.'); return; }
+  it.md = nm; it.plain = plainMap(nm);
+  if (it.plain.text !== ta.value) { ta.value = it.plain.text; try { ta.setSelectionRange(caret, caret); } catch { } }
+  it.ui.taMd.value = toEdit(it.md); refreshPreview(it); showNd(it);
+}
 function renderItem(it) {
   const ta = el('textarea', { class: 'src', spellcheck: 'false' });
-  ta.addEventListener('input', () => { it.md = fromEdit(ta.value); refreshPreview(it); showNd(it); });
+  const taMd = el('textarea', { class: 'src hidden', spellcheck: 'false' });
+  ta.addEventListener('input', () => onPlainInput(it));
+  taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; refreshPreview(it); showNd(it); });
   const pv = el('iframe', { class: 'pv hidden', sandbox: '' });
-  const tabMd = el('button', { class: 'on', onclick: () => tab(true) }, 'Văn bản (sửa được)');
-  const tabPv = el('button', { onclick: () => tab(false) }, 'Xem trước');
-  const tab = md => { tabMd.classList.toggle('on', md); tabPv.classList.toggle('on', !md); ta.classList.toggle('hidden', !md); pv.classList.toggle('hidden', md); if (!md) refreshPreview(it, true); };
+  const tabTx = el('button', { class: 'on', onclick: () => tab('text') }, 'Văn bản (sửa được)');
+  const tabPv = el('button', { onclick: () => tab('pv') }, 'Xem trước');
+  const tabAdv = el('button', { onclick: () => tab('md') }, 'Markdown + bố cục');
+  const tab = name => {
+    tabTx.classList.toggle('on', name === 'text'); tabPv.classList.toggle('on', name === 'pv'); tabAdv.classList.toggle('on', name === 'md');
+    ta.classList.toggle('hidden', name !== 'text'); taMd.classList.toggle('hidden', name !== 'md'); pv.classList.toggle('hidden', name !== 'pv');
+    it.ui.hint.textContent = name === 'md' ? 'Ký hiệu bố cục: {giữa} {phải} {đều} = căn lề · {thụt} = thụt đầu dòng · {p} = đoạn nguyên văn · **đậm** · *nghiêng* · {bảng…} = bảng đầu trang không viền (ô bắt đầu bằng < ^ > = căn trái/giữa/phải, ¦ ngăn cột).' : 'Chỉ chữ thuần – định dạng (căn lề, bảng, in đậm…) vẫn được giữ khi tải Word/Markdown. Không sửa xuyên qua nhiều ô bảng; cần xem ký hiệu bố cục thì mở tab "Markdown + bố cục".';
+    if (name === 'pv') refreshPreview(it, true);
+  };
   it.ui = {
     badge: el('span', { class: 'badge' }, 'Chờ'),
     bar: el('i'), msg: el('div', { class: 'msg' }),
     prog: el('div', { class: 'prog' }),
-    ta, pv, tab,
+    ta, taMd, pv, tab,
     dl30: el('button', { class: 'primary', onclick: () => download(it, 'docx30') }, '⬇ Word chuẩn thể thức'),
     dlRaw: el('button', { class: 'primary', onclick: () => download(it, 'docx') }, '⬇ Word gốc (raw)'),
     dl: el('button', { onclick: () => download(it, curFmt()) }, 'Tải xuống'),
@@ -1068,11 +1165,11 @@ function renderItem(it) {
     dlFix: el('button', { onclick: () => polish(it) }, '✨ AI sửa lỗi OCR'),
     review: el('div', { class: 'hidden' }),
     sum: el('div', { class: 'hidden' }),
-    hint: el('div', { class: 'msg' }, 'Ký hiệu bố cục: {giữa} {phải} {đều} = căn lề · {thụt} = thụt đầu dòng · {p} = đoạn nguyên văn · **đậm** · *nghiêng* · {bảng…} = bảng đầu trang không viền (ô bắt đầu bằng < ^ > = căn trái/giữa/phải, ¦ ngăn cột). Xoá ký hiệu nếu không cần.'),
+    hint: el('div', { class: 'msg' }, 'Chỉ chữ thuần – định dạng (căn lề, bảng, in đậm…) vẫn được giữ khi tải Word/Markdown. Không sửa xuyên qua nhiều ô bảng; cần xem ký hiệu bố cục thì mở tab "Markdown + bố cục".'),
   };
   it.ui.prog.append(it.ui.bar);
   it.ui.result.append(
-    el('div', { class: 'tabs' }, tabMd, tabPv, el('span', { class: 'sp2' }), it.ui.dlMdRaw, it.ui.dlMdFmt), ta, pv, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum,
+    el('div', { class: 'tabs' }, tabTx, tabPv, tabAdv, el('span', { class: 'sp2' }), it.ui.dlMdRaw, it.ui.dlMdFmt), ta, taMd, pv, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum,
     el('div', { class: 'acts' },
       it.ui.dl30, it.ui.dlRaw, it.ui.dl,
       el('button', { onclick: async () => { await copyText(domToText(mdToDom(it.md).body)); flash(it, 'Đã sao chép văn bản'); } }, 'Sao chép văn bản'),
@@ -1097,7 +1194,7 @@ function sync(it) {
   u.prog.classList.toggle('hidden', s !== 'run');
   u.result.classList.toggle('hidden', s !== 'done');
   if (s === 'done') {
-    u.ta.value = toEdit(it.md); showNd(it); u.msg.className = 'msg' + (it.warn ? ' warn' : '');
+    refreshTa(it); showNd(it); u.msg.className = 'msg' + (it.warn ? ' warn' : '');
     if (it.focus) { it.focus = false; it.node.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     u.msg.textContent = [it.info, it.warn].filter(Boolean).join(' — ');
   }
@@ -1351,14 +1448,14 @@ async function reviewIt(it) {
     issues.forEach(is => {
       const row = el('div', { class: 'rv' });
       const go = () => {
-        it.ui.tab(true); const ta = it.ui.ta; let i = ta.value.indexOf(is.where); if (i < 0) i = ta.value.indexOf(is.where.slice(0, 25));
+        it.ui.tab('md'); const ta = it.ui.taMd; let i = ta.value.indexOf(is.where); if (i < 0) i = ta.value.indexOf(is.where.slice(0, 25));
         if (i < 0) { alert('Không tìm thấy đoạn này trong văn bản (có thể đã sửa).'); return; }
         ta.focus(); ta.setSelectionRange(i, i + is.where.length);
         const ln = ta.value.slice(0, i).split('\n').length; ta.scrollTop = Math.max(0, (ln - 4) * 21); ta.scrollIntoView({ block: 'center', behavior: 'smooth' });
       };
       const apply = () => {
-        const ta = it.ui.ta, i = ta.value.indexOf(is.where); if (i < 0) { alert('Không tìm thấy đoạn này (có thể đã sửa).'); return; }
-        ta.value = ta.value.slice(0, i) + is.suggest + ta.value.slice(i + is.where.length); it.md = fromEdit(ta.value); refreshPreview(it); showNd(it); row.classList.add('done');
+        const ta = it.ui.taMd, i = ta.value.indexOf(is.where); if (i < 0) { alert('Không tìm thấy đoạn này (có thể đã sửa).'); return; }
+        ta.value = ta.value.slice(0, i) + is.suggest + ta.value.slice(i + is.where.length); it.md = fromEdit(ta.value); refreshTa(it); refreshPreview(it); showNd(it); row.classList.add('done');
       };
       row.append(
         el('div', {}, el('span', { class: 'badge ' + (is.level === 'cao' ? 'err' : is.level === 'vừa' ? 'warn' : '') }, is.level || '?'), ` Tr.${is.page} · ${is.problem || ''}`),
@@ -1374,7 +1471,7 @@ async function reviewIt(it) {
 function fixPrompt(hasImg) {
   return 'Bạn là bộ sửa lỗi OCR cho văn bản tiếng Việt. ' + (hasImg ? 'Hãy đối chiếu ẢNH GỐC với VĂN BẢN OCR (do Tesseract đọc) bên dưới. ' : 'Không có ảnh gốc; chỉ sửa những lỗi hiển nhiên theo ngữ cảnh. ') +
     'CHỈ trả về một mảng JSON các chỗ cần sửa, mỗi phần tử {"where":"trích NGUYÊN VĂN đoạn sai (≤80 ký tự, đủ dài để không trùng chỗ khác)","fix":"đúng đoạn đó sau khi sửa theo ảnh"}. ' +
-    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung, KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
+    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung. Nếu một đoạn OCR là RÁC do chữ ký, con dấu, hình vẽ, logo, đường kẻ hoặc vùng không phải chữ (không có chữ tương ứng trong ảnh) thì xoá nó (fix để rỗng), KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
 }
 function parseJsonArray(raw) { try { const a = raw.indexOf('['), b = raw.lastIndexOf(']'); const v = JSON.parse(raw.slice(a, b + 1)); return Array.isArray(v) ? v : []; } catch { return []; } }
 async function aiFixIt(it, o, onProg) {
@@ -1398,7 +1495,7 @@ async function aiFixIt(it, o, onProg) {
   }
   if (changes.length) {
     it.md = (marks ? out.map(p => `<!-- Trang ${p.n} -->\n\n${p.md}`).join('\n\n') : out[0].md).trim() + '\n';
-    it.ui.ta.value = toEdit(it.md); refreshPreview(it); showNd(it);
+    refreshTa(it); refreshPreview(it); showNd(it);
   }
   it.fixLog = [...(it.fixLog || []), ...changes]; renderFixLog(it);
   return { applied: changes.length, error };
@@ -1407,6 +1504,6 @@ function renderFixLog(it) {
   const box = it.ui.review; box.className = ''; box.innerHTML = '';
   if (!it.fixLog || !it.fixLog.length) { box.className = 'hidden'; return; }
   box.append(el('div', { class: 'msg' }, `AI đã sửa ${it.fixLog.length} chỗ (Tesseract → AI). Xem lại cho chắc:`),
-    el('div', { class: 'acts' }, el('button', { onclick: () => { it.md = it.mdBeforeAI; it.fixLog = []; it.mdBeforeAI = null; it.ui.ta.value = toEdit(it.md); refreshPreview(it); showNd(it); renderFixLog(it); } }, '↩ Hoàn tác tất cả sửa của AI')));
+    el('div', { class: 'acts' }, el('button', { onclick: () => { it.md = it.mdBeforeAI; it.fixLog = []; it.mdBeforeAI = null; refreshTa(it); refreshPreview(it); showNd(it); renderFixLog(it); } }, '↩ Hoàn tác tất cả sửa của AI')));
   it.fixLog.forEach(c => box.append(el('div', { class: 'rv' }, el('div', {}, `Tr.${c.page} · `, el('code', {}, c.where), ' → ', el('code', {}, c.fix)))));
 }
