@@ -1230,7 +1230,10 @@ function summary() {
   if (!items.length) $('#bar').classList.add('hidden');
   updateDlLabels();
 }
-const outName = (it, f) => `${baseName(it.file.name)}${f === 'docx30' ? ' - chuan the thuc' : f === 'md' ? ' (co format)' : ''}.${FORMATS[f].ext}`;
+const outName = (it, f) => {
+  const en = window.appI18n?.language === 'en';
+  return `${baseName(it.file.name)}${f === 'docx30' ? (en ? ' - official format' : ' - chuan the thuc') : f === 'md' ? (en ? ' (formatted)' : ' (co format)') : ''}.${FORMATS[f].ext}`;
+};
 async function download(it, f) {
   const btns = [it.ui.dl30, it.ui.dlRaw, it.ui.dl, it.ui.dlMdRaw, it.ui.dlMdFmt];
   try {
@@ -1365,7 +1368,7 @@ let camStamp = '';
 async function saveToPhotos(files) {
   if (!files || !files.length) return;
   try {
-    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: 'Ảnh quét' }); return; }
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: window.appI18n?.language === 'en' ? 'Scanned images' : 'Ảnh quét' }); return; }
   } catch (e) { if (e && e.name === 'AbortError') return; }
   files.forEach((f, i) => setTimeout(() => saveBlob(f, f.name || `scan-${i + 1}.jpg`), i * 350));
 }
@@ -1396,9 +1399,10 @@ function doneCam() {
   const shots = cam.shots.slice(), keep = $('#camSave').checked; try { localStorage.setItem('dc_camsave', keep ? '1' : '0'); } catch { }
   if (keep && shots.length) saveToPhotos(shots); // gọi ngay trong lần chạm để trình duyệt cho phép mở bảng chia sẻ
   closeCam(); if (!shots.length) return;
-  const t = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-  if (shots.length === 1) addFiles([new File([shots[0]], `Quét camera ${t}.jpg`, { type: 'image/jpeg' })], { focus: true });
-  else addFiles(shots, { merge: true, name: `Quét camera ${t} (${shots.length} trang)`, focus: true });
+  const en = window.appI18n?.language === 'en';
+  const t = new Date().toLocaleTimeString(en ? 'en-US' : 'vi-VN', { hour: '2-digit', minute: '2-digit' });
+  if (shots.length === 1) addFiles([new File([shots[0]], `${en ? 'Camera scan' : 'Quét camera'} ${t}.jpg`, { type: 'image/jpeg' })], { focus: true });
+  else addFiles(shots, { merge: true, name: `${en ? 'Camera scan' : 'Quét camera'} ${t} (${shots.length} ${en ? 'pages' : 'trang'})`, focus: true });
 }
 $('#camBtn').onclick = openCam; $('#camClose').onclick = closeCam; $('#camShot').onclick = shoot; $('#camDone').onclick = doneCam;
 $('#camNative').onchange = e => { addFiles(e.target.files, { focus: true }); e.target.value = ''; };
@@ -1431,7 +1435,7 @@ async function makeSummary(it) {
     const url = () => URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     box.append(
       el('div', { class: 'acts' },
-        el('button', { class: 'primary', onclick: () => saveBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${baseName(it.file.name)} - tom tat.html`) }, '⬇ Tải trang tóm tắt (.html)'),
+        el('button', { class: 'primary', onclick: () => saveBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${baseName(it.file.name)} - ${window.appI18n?.language === 'en' ? 'summary' : 'tom tat'}.html`) }, '⬇ Tải trang tóm tắt (.html)'),
         el('button', { onclick: () => window.open(url(), '_blank') }, 'Mở tab mới / In → PDF'),
         el('button', { onclick: () => makeSummary(it) }, 'Làm lại')),
       fr);
