@@ -44,3 +44,6 @@ Mặc định ("Tesseract đọc trước, AI chỉ sửa chỗ sai"): Tesseract
 ## Khung "Văn bản (sửa được)" và lọc chữ rác
 - Tab "Văn bản" chỉ hiển thị chữ thuần (không ký hiệu); sửa ở đây được ánh xạ ngược vào bản có định dạng nên Word/Markdown có format vẫn giữ căn lề, bảng, in đậm. Ký hiệu bố cục nằm ở tab "Markdown + bố cục".
 - "Lọc chữ rác ở vùng không phải chữ": bỏ vùng Tesseract nhận là hình/nhiễu/đường kẻ, từ có độ tin cậy thấp, ký hiệu lẻ; loại mực xanh và dấu đỏ khi làm sạch ảnh; AI sửa lỗi cũng xoá đoạn rác.
+
+## Lưu ảnh chụp từ camera
+Khi bấm "Xong" trong chế độ quét camera, ảnh gốc được lưu: trên điện thoại mở bảng chia sẻ (chọn "Lưu hình ảnh"/"Save Image" để vào thư viện Ảnh), trên máy tính tải file về. Mỗi kết quả ảnh cũng có nút "💾 Lưu ảnh gốc". Tắt bằng ô tick trong màn hình camera.
