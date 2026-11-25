@@ -254,8 +254,8 @@ function ocrLines(paras, clean) {
 /* ===== OCR bằng AI (Gemini / Claude): đọc cả chữ viết tay và dựng lại bố cục ===== */
 const AI_DEFAULTS = { gemini: 'gemini-flash-latest', claude: 'claude-sonnet-5-5' };
 function aiPrompt(layout, kind) {
-  if (kind === 'free') return 'Đây là ảnh trang ghi chép / bài giải viết tay (có thể kèm sơ đồ, mũi tên, bảng, công thức, phần tô sáng). Hãy chép lại TOÀN BỘ nội dung một cách chính xác, giữ nguyên ngôn ngữ gốc (Anh/Việt), số liệu, đơn vị, dấu thập phân và dấu ngăn cách hàng nghìn như tác giả viết. Quy tắc: (1) Đọc từ trên xuống dưới, mỗi dòng/phép tính là một dòng riêng (cách nhau bằng dòng trống). (2) Giữ nguyên ký hiệu (×, −, =, /, %, ~); phân số viết dạng a / b. (3) Sơ đồ (cây, luồng, mũi tên) không vẽ lại được: hãy diễn đạt thành bảng Markdown hoặc danh sách thụt lề, nêu đủ quan hệ "nguồn → đích", nhãn trên mũi tên (tỉ lệ %, chi phí…) và ghi chú đi kèm, đặt dưới một dòng tiêu đề **Sơ đồ**. (4) Chữ/số được tô sáng (highlight) bọc trong <mark>…</mark>. (5) Bảng có đường kẻ: chép thành <table border="1"> HTML — MỖI <tr> trên một dòng, không có dòng trống bên trong bảng; chép ĐỦ mọi hàng và mọi cột (kể cả ô trống, tuyệt đối không bỏ cột); ô gộp dùng rowspan/colspan; ô tiêu đề dùng <th>; số liệu giữ nguyên từng chữ số. (6) Chữ không đọc được ghi [?]. KHÔNG giải bài, KHÔNG bình luận, KHÔNG dùng code fence.';
-  let p = 'Bạn là công cụ OCR cho văn bản hành chính tiếng Việt. Chép lại CHÍNH XÁC toàn bộ chữ trong ảnh, kể cả chữ viết tay, số hiệu, ngày tháng, ghi chú bên lề, chữ trong con dấu và chữ ký (nếu đọc được). Giữ nguyên tiếng Việt có dấu, KHÔNG dịch, KHÔNG sửa chính tả, KHÔNG thêm bình luận. Chữ không đọc được thì ghi [?]. Chữ viết tay đặt trong *…* khi cần phân biệt với chữ in. Chỉ trả về nội dung, không dùng code fence.\n';
+  if (kind === 'free') return 'Đây là ảnh trang ghi chép / bài giải viết tay (có thể kèm sơ đồ, mũi tên, bảng, công thức, phần tô sáng). Hãy chép lại TOÀN BỘ nội dung một cách chính xác, giữ nguyên ngôn ngữ gốc (Anh/Việt), số liệu, đơn vị, dấu thập phân và dấu ngăn cách hàng nghìn như tác giả viết. Quy tắc: (1) Đọc từ trên xuống dưới, mỗi dòng/phép tính là một dòng riêng (cách nhau bằng dòng trống). (2) Giữ nguyên ký hiệu (×, −, =, /, %, ~); phân số viết dạng a / b. (3) Sơ đồ (cây, luồng, mũi tên) không vẽ lại được: hãy diễn đạt thành bảng Markdown hoặc danh sách thụt lề, nêu đủ quan hệ "nguồn → đích", nhãn trên mũi tên (tỉ lệ %, chi phí…) và ghi chú đi kèm, đặt dưới một dòng tiêu đề **Sơ đồ**. (4) Chữ/số được tô sáng (highlight) bọc trong <mark>…</mark>. (5) Bảng có đường kẻ: chép thành <table border="1"> HTML — MỖI <tr> trên một dòng, không có dòng trống bên trong bảng; chép ĐỦ mọi hàng và mọi cột (kể cả ô trống, tuyệt đối không bỏ cột); ô gộp dùng rowspan/colspan; ô tiêu đề dùng <th>; số liệu giữ nguyên từng chữ số. (6) Công thức, phương trình, ký hiệu toán/khoa học (phân số, căn, tích phân, tổng, chỉ số trên/dưới, chữ Hy Lạp, ≤ ≥ ≠ ± × ÷…): viết bằng LaTeX, đặt trong \\( … \\) khi nằm giữa dòng chữ, hoặc \\[ … \\] khi đứng riêng một dòng; KHÔNG dùng $…$ và KHÔNG bọc trong khối code; chỗ không đọc được ghi [?]. (7) Chữ không đọc được ghi [?]. KHÔNG giải bài, KHÔNG bình luận, KHÔNG dùng code fence.';
+  let p = 'Bạn là công cụ OCR cho văn bản hành chính tiếng Việt. Chép lại CHÍNH XÁC toàn bộ chữ trong ảnh, kể cả chữ viết tay, số hiệu, ngày tháng, ghi chú bên lề, chữ trong con dấu và chữ ký (nếu đọc được). Giữ nguyên tiếng Việt có dấu, KHÔNG dịch, KHÔNG sửa chính tả, KHÔNG thêm bình luận. Chữ không đọc được thì ghi [?]. Chữ viết tay đặt trong *…* khi cần phân biệt với chữ in. Chỉ trả về nội dung, không dùng code fence.\nCông thức, phương trình, ký hiệu toán/khoa học (phân số, căn, tích phân, tổng, chỉ số trên/dưới, chữ Hy Lạp, ≤ ≥ ≠ ± × ÷…): viết bằng LaTeX, đặt trong \\( … \\) khi nằm giữa dòng chữ, hoặc \\[ … \\] khi đứng riêng một dòng; KHÔNG dùng $…$ và KHÔNG bọc trong khối code; chỗ không đọc được ghi [?].\n';
   p += layout
     ? 'Dựng lại bố cục bằng Markdown kèm HTML tối giản: đoạn căn giữa → <p align="center">…</p> (xuống dòng bằng <br>); căn phải → <p align="right">; căn đều hai bên → <p align="justify">; đoạn thụt đầu dòng thêm data-indent="1" (ví dụ <p align="justify" data-indent="1">); chữ đậm <b>…</b>, nghiêng <i>…</i>. Phần đầu văn bản gồm hai khối đứng cạnh nhau (tên cơ quan | quốc hiệu, tiêu ngữ; hoặc "Số: …" | "Địa danh, ngày…"; hoặc "Nơi nhận" | chức danh người ký) phải dùng bảng không viền: <table data-plain="1" data-widths="45,55"><tbody><tr><td align="center"><b>…</b><br>…</td><td align="center">…</td></tr></tbody></table> (data-widths là % chiều rộng mỗi cột). Bảng có đường kẻ: chép thành <table border="1"> HTML — MỖI <tr> trên một dòng, không có dòng trống bên trong bảng; chép ĐỦ mọi hàng và mọi cột (kể cả ô trống, tuyệt đối không bỏ cột); ô gộp dùng rowspan/colspan; ô tiêu đề dùng <th>; số liệu giữ nguyên từng chữ số. Không dùng thêm thẻ nào khác. Khi ảnh có nhiều trang/ngắt trang rõ ràng, không cần đánh dấu.'
     : 'Định dạng đầu ra là Markdown thuần (tiêu đề #, **đậm**, danh sách, bảng Markdown). Không dùng HTML.';
@@ -865,16 +865,89 @@ function sanitize(doc, opt = {}) {
     });
   });
 }
-function mdToDom(md) {
-  const doc = new DOMParser().parseFromString(marked.parse(md, { gfm: true }), 'text/html');
-  sanitize(doc); return doc;
+/* ===== Công thức toán (LaTeX) =====
+   AI xuất \( ... \) (trong dòng) và \[ ... \] (đứng riêng). Markdown sẽ "ăn" dấu \ và * _ nên phải gỡ ra trước khi marked.parse,
+   rồi đặt lại thành <span class="math" data-tex=…>. Xem trước: MathJax vẽ SVG; Word/HTML: chèn ảnh (PNG/SVG) cùng bộ vẽ. */
+const MATH_RE = /\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)/g;
+function protectMath(md) {
+  const store = [];
+  const out = md.replace(MATH_RE, (m, d, i) => { store.push({ tex: (d ?? i).trim(), display: d !== undefined }); return '' + (store.length - 1) + ''; });
+  return { md: out, store };
 }
-const HTML_CSS = `body{font:16px/1.6 "Times New Roman",serif;max-width:820px;margin:24px auto;padding:0 16px;color:#111}
+function restoreMath(doc, store) {
+  if (!store.length) return;
+  const w = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT), hits = [];
+  while (w.nextNode()) if (w.currentNode.nodeValue.includes('')) hits.push(w.currentNode);
+  for (const n of hits) {
+    const frag = doc.createDocumentFragment();
+    n.nodeValue.split(/(\d+)/).forEach(part => {
+      const m = part.match(/^(\d+)$/);
+      if (!m || !store[m[1]]) { if (part) frag.append(part); return; }
+      const { tex, display } = store[m[1]], sp = doc.createElement('span');
+      sp.className = display ? 'math math-display' : 'math'; sp.setAttribute('data-tex', tex); sp.setAttribute('data-display', display ? '1' : '0');
+      sp.textContent = display ? '\\[' + tex + '\\]' : '\\(' + tex + '\\)';
+      frag.append(sp);
+    });
+    n.replaceWith(frag);
+  }
+}
+function mdToDom(md) {
+  const { md: m2, store } = protectMath(md);
+  const doc = new DOMParser().parseFromString(marked.parse(m2, { gfm: true }), 'text/html');
+  sanitize(doc); restoreMath(doc, store); return doc;
+}
+const MATH = new Map(); let mjPromise = null;           // key 'D|I' + tex -> { node, svg, png, w, h }
+const mathKey = sp => (sp.getAttribute('data-display') === '1' ? 'D' : 'I') + sp.getAttribute('data-tex');
+function ensureMathJax() {
+  if (window.MathJax && MathJax.tex2svgPromise) return MathJax.startup.promise;
+  if (!mjPromise) mjPromise = new Promise((res, rej) => {
+    window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'none' }, startup: { typeset: false } };
+    const sc = document.createElement('script'); sc.src = 'libs/mathjax/tex-svg.js'; sc.async = true;
+    sc.onload = () => MathJax.startup.promise.then(res, rej); sc.onerror = () => { mjPromise = null; rej(new Error('Không tải được MathJax')); };
+    document.head.append(sc);
+  });
+  return mjPromise;
+}
+async function mathSvg(tex, display) {
+  const key = (display ? 'D' : 'I') + tex; let e = MATH.get(key); if (e && e.node) return e;
+  await ensureMathJax();
+  const node = await MathJax.tex2svgPromise(tex, { display }); node.querySelectorAll('mjx-assistive-mml').forEach(n => n.remove()); const svg = node.querySelector('svg'); // bỏ MathML ẩn (nếu để lại sẽ hiện chữ trùng lặp)
+  e = { node, svg: svg ? svg.outerHTML : '' }; MATH.set(key, e); return e;
+}
+async function mathPng(key, e) { // SVG -> PNG (3x) + kích thước px ở cỡ chữ 16px
+  if (e.png || !e.node) return;
+  const host = document.createElement('div'); host.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:16px;visibility:hidden'; host.append(e.node.cloneNode(true)); document.body.append(host);
+  const svg = host.querySelector('svg'); if (!svg) { host.remove(); return; }
+  const r = svg.getBoundingClientRect(), w = Math.max(2, Math.ceil(r.width)), h = Math.max(2, Math.ceil(r.height)); host.remove();
+  const clone = new DOMParser().parseFromString(e.svg, 'image/svg+xml').documentElement;
+  clone.setAttribute('width', w); clone.setAttribute('height', h); clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); clone.setAttribute('style', 'color:#000');
+  const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone)); await img.decode();
+  const k = 3, cv = document.createElement('canvas'); cv.width = w * k; cv.height = h * k;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
+  const blob = await new Promise(rs => cv.toBlob(rs, 'image/png')); e.png = new Uint8Array(await blob.arrayBuffer()); e.w = w; e.h = h;
+}
+async function mathPrepare(doc, wantPng) { // gọi trước khi xuất Word/HTML: dựng sẵn SVG/PNG cho mọi công thức
+  const sp = [...doc.querySelectorAll('span.math[data-tex]')]; if (!sp.length) return;
+  try {
+    for (const s of sp) { const e = await mathSvg(s.getAttribute('data-tex'), s.getAttribute('data-display') === '1'); if (wantPng) await mathPng(mathKey(s), e); }
+  } catch (err) { console.warn('Không dựng được công thức:', err.message); }
+}
+function renderMathIn(root) { // xem trước: thay chữ LaTeX bằng SVG khi MathJax sẵn sàng
+  const sp = [...root.querySelectorAll('span.math[data-tex]:not([data-done])')]; if (!sp.length) return;
+  sp.forEach(s => mathSvg(s.getAttribute('data-tex'), s.getAttribute('data-display') === '1').then(e => { s.replaceChildren(e.node.cloneNode(true)); s.setAttribute('data-done', '1'); s.setAttribute('aria-label', s.getAttribute('data-tex')); }).catch(() => { }));
+}
+function mathRun(span) { // ảnh công thức cho Word (cỡ ~17px ≈ 13pt)
+  const e = MATH.get(mathKey(span)); if (!e || !e.png) return null; const k = 17 / 16;
+  return new docx.ImageRun({ data: e.png, transformation: { width: Math.max(4, Math.round(e.w * k)), height: Math.max(4, Math.round(e.h * k)) }, type: 'png' });
+}
+const HTML_CSS = `.math-display{display:block;text-align:center;margin:.7em 0;overflow-x:auto}.math svg{vertical-align:middle}
+body{font:16px/1.6 "Times New Roman",serif;max-width:820px;margin:24px auto;padding:0 16px;color:#111}
 table{border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:4px 8px;vertical-align:top}th{background:#f0f0f0}
 table[data-plain]{width:100%}table[data-plain] td{border:0}[data-indent]{text-indent:1.27cm}
 pre,code{background:#f4f4f4;font-family:Consolas,monospace}pre{padding:10px;overflow:auto}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#444}`;
 function htmlString(md, title) {
   const doc = mdToDom(md);
+  doc.querySelectorAll('span.math[data-tex]').forEach(sp => { const e = MATH.get(mathKey(sp)); if (e && e.svg) sp.innerHTML = e.svg; });
   return `<!doctype html>\n<html lang="vi"><head><meta charset="utf-8"><title>${title.replace(/</g, '&lt;')}</title><style>${HTML_CSS}</style></head><body>\n${doc.body.innerHTML}\n</body></html>`;
 }
 function domToText(root) {
@@ -921,6 +994,7 @@ function buildDocx(md, pics) {
       else if (c.nodeType === 1) {
         const tag = c.tagName;
         if (tag === 'BR') out.push(new D.TextRun({ break: 1 }));
+        else if (tag === 'SPAN' && c.classList.contains('math')) { const mr = mathRun(c); out.push(mr || run(c.textContent, st)); }
         else if (tag === 'IMG' || tag === 'UL' || tag === 'OL' || tag === 'TABLE') { /* bỏ */ }
         else if (tag === 'A') {
           const kids = inline(c, { ...st, link: true }), href = c.getAttribute('href') || '';
@@ -937,7 +1011,7 @@ function buildDocx(md, pics) {
   const trimRuns = r => r; // giữ nguyên
   const ALIGN = { left: D.AlignmentType.LEFT, center: D.AlignmentType.CENTER, right: D.AlignmentType.RIGHT, justify: D.AlignmentType.JUSTIFIED };
   const para = (node, extra = {}) => new D.Paragraph({
-    children: inline(node), spacing: { after: 120 }, alignment: ALIGN[node.getAttribute('align')],
+    children: inline(node), spacing: { after: 120, ...(node.querySelector('span.math') ? { line: 240, lineRule: D.LineRuleType.AUTO } : {}) }, alignment: ALIGN[node.getAttribute('align')] ?? ((m => m && m.textContent.trim() === node.textContent.trim())(node.querySelector('span.math-display')) ? D.AlignmentType.CENTER : undefined),
     ...extra, indent: { ...(extra.indent || {}), ...(node.hasAttribute('data-indent') ? { firstLine: 720 } : {}) },
   });
   const liRuns = li => {
@@ -1028,6 +1102,7 @@ const FORMATS = {
 };
 async function exportBlob(md, fmt, name, pics) {
   const F = FORMATS[fmt];
+  if (['docx', 'docx30', 'html'].includes(fmt) && /\\[\[(]/.test(md)) await mathPrepare(mdToDom(md), fmt !== 'html');
   const mk = (data, mime = F.mime) => new Blob([data], { type: mime + ';charset=utf-8' });
   if (fmt === 'md') return mk(md);
   if (fmt === 'mdraw') return mk(toPlainMd(md));
@@ -1318,7 +1393,7 @@ function renderPreviewInto(it, target) {
     if (wide) body.classList.add('has-wide');
     if (!body.textContent.trim() && it.md.trim()) body.append(el('pre', {}, it.plain ? it.plain.text : '')); // không bao giờ để khung trống nếu có chữ
     if (document.getElementById('viMark')?.checked && (it.isOcr || (it.ocrPages && it.ocrPages.length))) viMark(body);
-    target.replaceChildren(body);
+    target.replaceChildren(body); renderMathIn(body);
   } catch (e) { target.textContent = e.message; }
 }
 function refreshPreview(it, now) {
@@ -1632,7 +1707,7 @@ async function reviewIt(it) {
 function fixPrompt(hasImg) {
   return 'Bạn là bộ sửa lỗi OCR cho văn bản tiếng Việt. ' + (hasImg ? 'Hãy đối chiếu ẢNH GỐC với VĂN BẢN OCR (do Tesseract đọc) bên dưới. ' : 'Không có ảnh gốc; chỉ sửa những lỗi hiển nhiên theo ngữ cảnh. ') +
     'CHỈ trả về một mảng JSON các chỗ cần sửa, mỗi phần tử {"where":"trích NGUYÊN VĂN đoạn sai (≤80 ký tự, đủ dài để không trùng chỗ khác)","fix":"đúng đoạn đó sau khi sửa theo ảnh"}. ' +
-    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung. Nếu một đoạn OCR là RÁC do chữ ký, con dấu, hình vẽ, logo, đường kẻ hoặc vùng không phải chữ (không có chữ tương ứng trong ảnh) thì xoá nó (fix để rỗng), KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Nếu văn bản OCR bị THIẾU hẳn một dòng/đoạn so với ảnh, dùng where = dòng liền trước chỗ thiếu và fix = dòng đó + xuống dòng + phần còn thiếu. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
+    'Chỉ nêu chỗ CHẮC CHẮN sai: ký tự/dấu bị nhầm, số liệu, mã số/mã lớp, tên riêng, ngày tháng, chữ dính/tách, ô bảng sai hoặc thiếu chữ. KHÔNG sửa văn phong, KHÔNG thêm bớt nội dung. Nếu một đoạn OCR là RÁC do chữ ký, con dấu, hình vẽ, logo, đường kẻ hoặc vùng không phải chữ (không có chữ tương ứng trong ảnh) thì xoá nó (fix để rỗng), KHÔNG đụng vào cấu trúc: giữ nguyên mọi ký hiệu {…}, thẻ HTML, dấu ¦ ↵ và dấu **; công thức LaTeX trong \\( … \\) và \\[ … \\] chỉ sửa khi sai rõ ràng so với ảnh và vẫn giữ nguyên cặp dấu bao. "where" phải xuất hiện NGUYÊN VĂN trong văn bản OCR. Nếu văn bản OCR bị THIẾU hẳn một dòng/đoạn so với ảnh, dùng where = dòng liền trước chỗ thiếu và fix = dòng đó + xuống dòng + phần còn thiếu. Tối đa 80 mục. Không có lỗi thì trả []. Không giải thích, không code fence.';
 }
 function parseJsonArray(raw) { try { const a = raw.indexOf('['), b = raw.lastIndexOf(']'); const v = JSON.parse(raw.slice(a, b + 1)); return Array.isArray(v) ? v : []; } catch { return []; } }
 async function aiFixIt(it, o, onProg) {

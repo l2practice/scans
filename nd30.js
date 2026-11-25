@@ -216,11 +216,12 @@ const ND = (() => {
       const parts = [];
       const walk = (n, st) => n.childNodes.forEach(c => {
         if (c.nodeType === 3) { const t = c.textContent.replace(/\s+/g, ' '); if (t) parts.push({ t, st }); }
+        else if (c.nodeType === 1 && c.tagName === 'SPAN' && c.classList.contains('math')) parts.push({ math: c });
         else if (c.nodeType === 1 && !/^(TABLE|UL|OL|IMG)$/.test(c.tagName)) walk(c, { ...st, b: st.b || /^(B|STRONG)$/.test(c.tagName), i: st.i || /^(I|EM)$/.test(c.tagName), hl: st.hl || c.tagName === 'MARK' });
       });
       walk(el, base);
-      if (parts.length) { parts[0].t = parts[0].t.replace(/^\s+/, ''); parts[parts.length - 1].t = parts[parts.length - 1].t.replace(/\s+$/, ''); }
-      return parts.filter(p => p.t).map(p => rn(p.t, { sz: BODY, b: p.st.b, i: p.st.i, hl: p.st.hl }));
+      if (parts.length) { if (parts[0].t) parts[0].t = parts[0].t.replace(/^\s+/, ''); const l = parts[parts.length - 1]; if (l.t) l.t = l.t.replace(/\s+$/, ''); }
+      return parts.filter(p => p.t || p.math).map(p => p.math ? (mathRun(p.math) || rn(p.math.textContent, { sz: BODY })) : rn(p.t, { sz: BODY, b: p.st.b, i: p.st.i, hl: p.st.hl }));
     };
     const bodyP = (it, o = {}) => pr(o.runs || runsOf(it.el, { b: o.b ?? it.b, i: o.i ?? it.i }),
       { jc: o.jc ?? A.JUSTIFIED, firstLine: o.firstLine ?? 720, before: o.before ?? 0, after: o.after ?? AFTER, line: LINE, keepNext: o.keepNext });
