@@ -66,15 +66,41 @@ async function getWorker(lang) {
   return ocr.worker;
 }
 
+/* Gom pixel màu thành mảng (ô lưới 6px, nối khe hở nhỏ); chỉ làm trắng mảng cao >= ~4% cạnh ngắn và tỉ lệ rộng/cao <= 4 (con dấu tròn/vuông, chữ ký).
+   Dòng chữ màu (rất dẹt) hoặc chữ nhỏ không bị xoá nữa – trước đây mọi pixel đỏ/cam đều bị xoá nên chữ đỏ, link cam bị đọc thành rác. */
+function eraseInkBlobs(col, g, w, h) {
+  const C = 6, gw = Math.ceil(w / C), gh = Math.ceil(h / C), cnt = new Uint16Array(gw * gh);
+  for (let y = 0; y < h; y++) { const row = ((y / C) | 0) * gw; for (let x = 0; x < w; x++) if (col[y * w + x]) cnt[row + ((x / C) | 0)]++; }
+  const on = new Uint8Array(gw * gh); for (let i = 0; i < on.length; i++) on[i] = cnt[i] >= C * C * 0.12 ? 1 : 0;
+  const lab = new Int32Array(gw * gh), big = [0], minH = Math.max(70, Math.round(0.04 * Math.min(w, h))); let n = 0;
+  for (let s0 = 0; s0 < on.length; s0++) {
+    if (!on[s0] || lab[s0]) continue;
+    n++; const st = [s0]; lab[s0] = n; let x0 = gw, x1 = 0, y0 = gh, y1 = 0;
+    while (st.length) {
+      const c = st.pop(), cx = c % gw, cy = (c / gw) | 0;
+      if (cx < x0) x0 = cx; if (cx > x1) x1 = cx; if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+        const k = ny * gw + nx; if (on[k] && !lab[k]) { lab[k] = n; st.push(k); }
+      }
+    }
+    const bw = (x1 - x0 + 1) * C, bh = (y1 - y0 + 1) * C; big[n] = bh >= minH && bw / bh <= 4 ? 1 : 0;
+  }
+  if (!big.some(Boolean)) return;
+  for (let y = 0; y < h; y++) { const row = ((y / C) | 0) * gw; for (let x = 0; x < w; x++) if (col[y * w + x] && big[lab[row + ((x / C) | 0)]]) g[y * w + x] = 255; }
+}
+
 /* Khử bóng (ngưỡng thích nghi) + loại dấu đỏ để OCR công văn chụp bằng điện thoại tốt hơn */
 function preprocess(cv, cleanInk) {
   const w = cv.width, h = cv.height, ctx = cv.getContext('2d', { willReadFrequently: true });
   const img = ctx.getImageData(0, 0, w, h), d = img.data;
-  const g = new Uint8ClampedArray(w * h);
+  const g = new Uint8ClampedArray(w * h), col = new Uint8Array(w * h); let any = 0;
   for (let i = 0, p = 0; i < g.length; i++, p += 4) {
     const r = d[p], gg = d[p + 1], b = d[p + 2];
-    g[i] = ((r > 150 && gg < 120 && b < 120) || (cleanInk && b > 90 && b - Math.max(r, gg) > 40)) ? 255 : (0.299 * r + 0.587 * gg + 0.114 * b); // xoá dấu đỏ (và mực xanh chữ ký nếu bật lọc)
+    if ((r > 150 && gg < 120 && b < 120) || (cleanInk && b > 90 && b - Math.max(r, gg) > 40)) { col[i] = 1; any = 1; } // pixel đỏ (và mực xanh chữ ký nếu bật lọc)
+    g[i] = 0.299 * r + 0.587 * gg + 0.114 * b;
   }
+  if (any) eraseInkBlobs(col, g, w, h); // chỉ xoá mảng màu LỚN và gần vuông (con dấu, chữ ký); chữ đỏ/xanh/cam bình thường (link, cảnh báo, tiêu đề) được giữ
   const W = w + 1, S = new Uint32Array(W * (h + 1));
   for (let y = 1; y <= h; y++) {
     let row = 0;
