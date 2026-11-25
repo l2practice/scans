@@ -12,6 +12,10 @@ const el = (tag, attrs = {}, ...kids) => {
   kids.flat().forEach(c => n.append(c));
   return n;
 };
+const SVGNS = 'http://www.w3.org/2000/svg';
+const ic = n => { const s = document.createElementNS(SVGNS, 'svg'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true'); const u = document.createElementNS(SVGNS, 'use'); u.setAttribute('href', '#i-' + n); s.append(u); return s; };
+const ib = (n, t) => [ic(n), t];
+const setBtn = (b, n, t) => b.replaceChildren(ic(n), t);
 const baseName = n => n.replace(/\.[^.]+$/, '');
 const extOf = n => (n.match(/\.([^.]+)$/) || [, ''])[1].toLowerCase();
 const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
@@ -293,7 +297,7 @@ async function aiOnce(opts, model, prompt, b64, maxTok) {
   }
 }
 async function aiCall(opts, prompt, b64, maxTok = 16000) {
-  if (!opts.aiKey) throw new Error('Chưa nhập API key cho chế độ AI (khung "🤖 AI").');
+  if (!opts.aiKey) throw new Error('Chưa nhập API key cho chế độ AI (khung "AI").');
   const first = opts.aiModel || AI_DEFAULTS[opts.engine], tried = [first];
   const queue = [first, ...aiFallbacks(opts.engine, first)];
   let last;
@@ -306,7 +310,7 @@ async function aiCall(opts, prompt, b64, maxTok = 16000) {
     if (!switchable) break;
   }
   const nm = opts.engine === 'gemini' ? 'Gemini' : 'Claude';
-  const hint = [429, 500, 502, 503, 504].includes(last.status) ? ` → ${nm} đang quá tải hoặc hết lượt. App đã tự thử lại và thử model dự phòng nhưng chưa được: hãy đợi vài phút, hoặc bấm ↻ để chọn model khác.` : ([403, 404].includes(last.status) ? ' → Model này không dùng được với key của bạn: bấm ↻ để tải danh sách model dùng được.' : '');
+  const hint = [429, 500, 502, 503, 504].includes(last.status) ? ` → ${nm} đang quá tải hoặc hết lượt. App đã tự thử lại và thử model dự phòng nhưng chưa được: hãy đợi vài phút, hoặc bấm nút làm mới cạnh ô model để chọn model khác.` : ([403, 404].includes(last.status) ? ' → Model này không dùng được với key của bạn: bấm nút làm mới cạnh ô model để tải danh sách model dùng được.' : '');
   throw new Error(`${nm} lỗi ${last.status} (${last.model}): ${last.msg}${hint}`);
 }
 async function aiListModels(opts) {
@@ -1144,7 +1148,7 @@ function applyPlainEdit(md, oldTxt, map, newTxt) {
   if (/\n/.test(rep)) rep = rep.replace(/\n+/g, md.lastIndexOf('<p', start) > md.lastIndexOf('</p>', start) ? '<br>' : '\n\n');
   return md.slice(0, start) + rep + md.slice(end);
 }
-function refreshTa(it) { it.plain = plainMap(it.md); it.ui.ta.value = it.plain.text; it.ui.taMd.value = toEdit(it.md); if (it.ui.sourceText) it.ui.sourceText.textContent = it.plain.text; }
+function refreshTa(it) { it.plain = plainMap(it.md); it.ui.ta.value = it.plain.text; it.ui.taMd.value = toEdit(it.md); }
 function onPlainInput(it) {
   const ta = it.ui.ta, caret = ta.selectionStart, old = it.plain;
   const nm = applyPlainEdit(it.md, old.text, old.map, ta.value);
@@ -1156,24 +1160,24 @@ function onPlainInput(it) {
 function renderItem(it) {
   const ta = el('textarea', { class: 'src', spellcheck: 'false' });
   const taMd = el('textarea', { class: 'src hidden', spellcheck: 'false' });
-  ta.addEventListener('input', () => { onPlainInput(it); if (it.ui?.sourceText) it.ui.sourceText.textContent = ta.value; });
-  taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; if (it.ui?.sourceText) it.ui.sourceText.textContent = ta.value; refreshPreview(it); showNd(it); });
+  ta.addEventListener('input', () => onPlainInput(it));
+  taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; refreshPreview(it); showNd(it); });
   const pv = el('div', { class: 'pv preview-doc hidden' });
-  const tabTx = el('button', { onclick: () => tab('text') }, 'Văn bản (sửa được)');
-  const tabPv = el('button', { class: 'on', onclick: () => tab('pv') }, 'Xem trước');
-  const tabAdv = el('button', { onclick: () => tab('md') }, 'Markdown + bố cục');
+  const tabTx = el('button', { onclick: () => tab('text') }, ...ib('file', 'Văn bản (sửa được)'));
+  const tabPv = el('button', { class: 'on', onclick: () => tab('pv') }, ...ib('eye', 'Xem trước'));
+  const tabAdv = el('button', { onclick: () => tab('md') }, ...ib('code', 'Markdown + bố cục'));
   const sourceImage = el('img', { class: 'source-image', alt: 'Ảnh gốc' });
-  const sourceText = el('pre', { class: 'source-ocr-text' });
+  const sourcePreview = el('div', { class: 'source-preview preview-doc' });
   const sourceLabel = el('span', { class: 'source-file-name' });
   const sourceCount = el('span', { class: 'source-count' });
-  const sourcePrev = el('button', { onclick: () => showOriginal(it, -1) }, '‹ Trước');
-  const sourceNext = el('button', { onclick: () => showOriginal(it, 1) }, 'Sau ›');
+  const sourcePrev = el('button', { onclick: () => showOriginal(it, -1) }, ...ib('chevron-left', 'Trước'));
+  const sourceNext = el('button', { onclick: () => showOriginal(it, 1) }, 'Sau', ic('chevron-right'));
   const sourceReview = el('section', { class: 'source-review hidden' },
-    el('div', { class: 'source-review-header' }, el('h3', {}, 'Đối chiếu ảnh gốc và văn bản OCR'), el('div', { class: 'source-controls' }, sourcePrev, sourceCount, sourceNext)),
+    el('div', { class: 'source-review-header' }, el('h3', {}, 'Đối chiếu ảnh gốc và bản xem trước'), el('div', { class: 'source-controls' }, sourcePrev, sourceCount, sourceNext)),
     el('div', { class: 'source-compare-grid' },
       el('div', { class: 'source-pane' }, el('h4', {}, 'Ảnh gốc'), sourceLabel, sourceImage),
-      el('div', { class: 'source-pane' }, el('h4', {}, 'Văn bản OCR'), sourceText)));
-  const sourceBtn = el('button', { disabled: !it.srcFiles, onclick: () => toggleOriginal(it) }, '🖼 Xem lại ảnh gốc');
+      el('div', { class: 'source-pane' }, el('h4', {}, 'Xem trước'), sourcePreview)));
+  const sourceBtn = el('button', { disabled: !it.srcFiles, onclick: () => toggleOriginal(it) }, ...ib('image', 'Xem lại ảnh gốc'));
   const tab = name => {
     tabTx.classList.toggle('on', name === 'text'); tabPv.classList.toggle('on', name === 'pv'); tabAdv.classList.toggle('on', name === 'md');
     ta.classList.toggle('hidden', name !== 'text'); taMd.classList.toggle('hidden', name !== 'md'); pv.classList.toggle('hidden', name !== 'pv');
@@ -1184,51 +1188,50 @@ function renderItem(it) {
     badge: el('span', { class: 'badge' }, 'Chờ'),
     bar: el('i'), msg: el('div', { class: 'msg' }),
     prog: el('div', { class: 'prog' }),
-    ta, taMd, pv, tab, sourceImage, sourceText, sourceLabel, sourceCount, sourcePrev, sourceNext, sourceReview, sourceBtn,
-    dl30: el('button', { class: 'primary', onclick: () => download(it, 'docx30') }, '⬇ Word chuẩn thể thức'),
-    dlRaw: el('button', { class: 'primary', onclick: () => download(it, 'docx') }, '⬇ Word gốc (raw)'),
+    ta, taMd, pv, tab, sourceImage, sourcePreview, sourceLabel, sourceCount, sourcePrev, sourceNext, sourceReview, sourceBtn,
+    dl30: el('button', { class: 'primary', onclick: () => download(it, 'docx30') }, ...ib('file', 'Word chuẩn thể thức')),
+    dlRaw: el('button', { class: 'primary', onclick: () => download(it, 'docx') }, ...ib('file', 'Word gốc (raw)')),
     dl: el('button', { onclick: () => download(it, curFmt()) }, 'Tải xuống'),
-    cpTxt: el('button', { class: 'primary copybtn', title: 'Sao chép toàn bộ văn bản (đúng như đang hiển thị ở tab Văn bản)', onclick: async e => { const b = e.currentTarget, old = b.textContent; await copyText(it.plain ? it.plain.text : plainMap(it.md).text); b.textContent = '✓ Đã sao chép'; setTimeout(() => { b.textContent = old; }, 1600); } }, '📋 Sao chép văn bản'),
-    dlMdRaw: el('button', { class: 'dl', title: 'Markdown sạch, không có thẻ HTML', onclick: () => download(it, 'mdraw') }, '⬇ Tải .md thuần'),
-    dlMdFmt: el('button', { class: 'dl', title: 'Markdown có thẻ HTML giữ bố cục (căn giữa, bảng, đậm…)', onclick: () => download(it, 'md') }, '⬇ Tải .md có format'),
+    cpTxt: el('button', { class: 'primary copybtn', title: 'Sao chép toàn bộ văn bản (đúng như đang hiển thị ở tab Văn bản)', onclick: async e => { const b = e.currentTarget, keep = [...b.childNodes].map(n => n.cloneNode(true)); await copyText(it.plain ? it.plain.text : plainMap(it.md).text); setBtn(b, 'check', 'Đã sao chép'); setTimeout(() => b.replaceChildren(...keep), 1600); } }, ...ib('copy', 'Sao chép văn bản')),
+    dlMdRaw: el('button', { class: 'dl', title: 'Markdown sạch, không có thẻ HTML', onclick: () => download(it, 'mdraw') }, ...ib('download', 'Tải .md thuần')),
+    dlMdFmt: el('button', { class: 'dl', title: 'Markdown có thẻ HTML giữ bố cục (căn giữa, bảng, đậm…)', onclick: () => download(it, 'md') }, ...ib('download', 'Tải .md có format')),
     result: el('div', { class: 'hidden' }),
     nd: el('div', { class: 'msg nd hidden' }),
-    dlSum: el('button', { onclick: () => makeSummary(it) }, '🎨 Tóm tắt trực quan'),
-    dlRev: el('button', { onclick: () => reviewIt(it) }, '🔍 AI soát chỗ có thể lỗi'),
-    dlFix: el('button', { onclick: () => polish(it) }, '✨ AI sửa lỗi OCR'),
-    dlImg: el('button', { title: 'Lưu ảnh gốc vào thư viện ảnh (điện thoại) hoặc tải về (máy tính)', onclick: () => saveToPhotos(it.srcFiles) }, '💾 Lưu ảnh gốc'),
+    dlSum: el('button', { onclick: () => makeSummary(it) }, ...ib('palette', 'Tóm tắt trực quan')),
+    dlRev: el('button', { onclick: () => reviewIt(it) }, ...ib('search', 'AI soát chỗ có thể lỗi')),
+    dlFix: el('button', { onclick: () => polish(it) }, ...ib('wand', 'AI sửa lỗi OCR')),
+    dlImg: el('button', { title: 'Lưu ảnh gốc vào thư viện ảnh (điện thoại) hoặc tải về (máy tính)', onclick: () => saveToPhotos(it.srcFiles) }, ...ib('save', 'Lưu ảnh gốc')),
     review: el('div', { class: 'hidden' }),
     sum: el('div', { class: 'hidden' }),
     hint: el('div', { class: 'msg' }, 'Chỉ chữ thuần – định dạng (căn lề, bảng, in đậm…) vẫn được giữ khi tải Word/Markdown. Không sửa xuyên qua nhiều ô bảng; cần xem ký hiệu bố cục thì mở tab "Markdown + bố cục".'),
   };
   it.ui.prog.append(it.ui.bar);
   const quickPanel = el('section', { class: 'quick-panel quick-export' },
-    el('h3', {}, '↓ Tải nhanh'),
+    el('h3', {}, ...ib('download', 'Tải nhanh')),
     el('div', { class: 'quick-actions' }, it.ui.cpTxt, it.ui.dlMdRaw, it.ui.dlMdFmt));
   const viewPanel = el('section', { class: 'quick-panel quick-view' },
-    el('h3', {}, '◉ Chế độ xem'),
+    el('h3', {}, ...ib('eye', 'Chế độ xem')),
     el('div', { class: 'tabs view-tabs' }, tabTx, tabPv, tabAdv, sourceBtn));
   const documentPanel = el('main', { class: 'document-panel' },
-    el('div', { class: 'document-canvas' }, ta, taMd, pv), sourceReview, it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum);
-  const sidebar = el('aside', { class: 'action-sidebar' },
-    el('section', { class: 'side-section ai-section' },
-      el('h3', {}, '✨ Xử lý & AI'),
-      el('div', { class: 'side-actions' }, it.ui.dlSum, it.ui.dlFix, it.ui.dlRev)),
-    el('section', { class: 'side-section manage-section' },
-      el('h3', {}, '⚙ Chỉnh sửa & quản lý'),
-      el('div', { class: 'side-actions' },
-        ...(it.srcFiles ? [it.ui.dlImg] : []),
-        el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, '↻ Chuyển lại'),
-        el('button', { class: 'danger', onclick: () => { if (it.ui.sourceUrl) URL.revokeObjectURL(it.ui.sourceUrl); items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, '⌫ Xoá'))));
+    el('div', { class: 'document-canvas' }, ta, taMd, pv), it.ui.hint, it.ui.nd, it.ui.review, it.ui.sum);
+  const aiSection = el('section', { class: 'side-section ai-section' },
+    el('h3', {}, ...ib('sparkles', 'Xử lý & AI')),
+    el('div', { class: 'side-actions' }, it.ui.dlSum, it.ui.dlFix, it.ui.dlRev));
+  const manageSection = el('section', { class: 'side-section manage-section' },
+    el('h3', {}, ...ib('sliders', 'Chỉnh sửa & quản lý')),
+    el('div', { class: 'side-actions' },
+      ...(it.srcFiles ? [it.ui.dlImg] : []),
+      el('button', { onclick: () => { it.status = 'wait'; it.error = ''; sync(it); runQueue(); } }, ...ib('refresh', 'Chuyển lại')),
+      el('button', { class: 'danger', onclick: () => { if (it.ui.sourceUrl) URL.revokeObjectURL(it.ui.sourceUrl); items.splice(items.indexOf(it), 1); it.node.remove(); summary(); } }, ...ib('trash', 'Xoá'))));
   const exportPanel = el('section', { class: 'export-panel' },
-    el('h3', {}, '↓ Xuất file'),
+    el('h3', {}, ...ib('download', 'Xuất file')),
     el('div', { class: 'export-actions' },
       it.ui.dl30, it.ui.dlRaw, it.ui.dl,
-      el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, '▢ Sao chép Markdown')));
+      el('button', { onclick: async () => { await copyText(toPlainMd(it.md)); flash(it, 'Đã sao chép Markdown thuần'); } }, ...ib('copy', 'Sao chép Markdown'))));
   it.ui.result.append(
     el('div', { class: 'item-toolbar' }, quickPanel, viewPanel),
-    el('div', { class: 'workspace-grid' }, documentPanel, sidebar),
-    exportPanel);
+    el('div', { class: 'item-toolbar item-actions' }, aiSection, manageSection),
+    documentPanel, sourceReview, exportPanel);
   tab('pv');
   return el('div', { class: 'card result-card' },
     el('div', { class: 'file-h' }, el('span', { class: 'name' }, it.file.name), el('span', { class: 'badge' }, fmtSize(it.file.size)), it.ui.badge),
@@ -1246,7 +1249,7 @@ function showOriginal(it, delta = 0) {
   const item = pages[u.sourceIndex];
   if (u.sourceUrl) URL.revokeObjectURL(u.sourceUrl);
   u.sourceUrl = URL.createObjectURL(item.blob); u.sourceImage.src = u.sourceUrl;
-  u.sourceLabel.textContent = item.label; u.sourceText.textContent = u.ta.value;
+  u.sourceLabel.textContent = item.label; renderPreviewInto(it, u.sourcePreview);
   u.sourceCount.textContent = `${u.sourceIndex + 1} / ${pages.length}`;
   u.sourcePrev.disabled = pages.length < 2; u.sourceNext.disabled = pages.length < 2;
 }
@@ -1256,8 +1259,7 @@ function toggleOriginal(it) {
   if (opening) { showOriginal(it); u.sourceReview.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   else if (u.sourceUrl) { URL.revokeObjectURL(u.sourceUrl); u.sourceUrl = null; }
 }
-function refreshPreview(it, now) {
-  if (!now && it.ui.pv.classList.contains('hidden')) return;
+function renderPreviewInto(it, target) {
   try {
     const doc = mdToDom(it.md), body = el('div', { class: 'preview-content' });
     body.innerHTML = doc.body.innerHTML;
@@ -1270,8 +1272,13 @@ function refreshPreview(it, now) {
     });
     if (wide) body.classList.add('has-wide');
     if (!body.textContent.trim() && it.md.trim()) body.append(el('pre', {}, it.plain ? it.plain.text : '')); // không bao giờ để khung trống nếu có chữ
-    it.ui.pv.replaceChildren(body);
-  } catch (e) { it.ui.pv.textContent = e.message; }
+    target.replaceChildren(body);
+  } catch (e) { target.textContent = e.message; }
+}
+function refreshPreview(it, now) {
+  const u = it.ui, cmp = u.sourceReview && !u.sourceReview.classList.contains('hidden');
+  if (!now && u.pv.classList.contains('hidden') && !cmp) return;
+  renderPreviewInto(it, u.pv); if (cmp) renderPreviewInto(it, u.sourcePreview);
 }
 function sync(it) {
   const u = it.ui, s = it.status;
@@ -1295,7 +1302,7 @@ function showNd(it) {
 }
 function updateDlLabels() {
   const f = curFmt();
-  items.forEach(it => { it.ui.dl.textContent = `Tải .${FORMATS[f].ext}`; showNd(it); });
+  items.forEach(it => { setBtn(it.ui.dl, 'download', `Tải .${FORMATS[f].ext}`); showNd(it); });
   $('#dlAll').disabled = !items.some(i => i.status === 'done');
 }
 function summary() {
@@ -1332,7 +1339,7 @@ async function runQueue() {
         if (o.engine !== 'tess' && o.aiKey && !useAiOcr(o) && (r.isOcr || (r.ocrPages && r.ocrPages.length)) && r.md.trim()) {
           it.status = 'run'; sync(it); progress(1, 'Tesseract xong – AI đang sửa chỗ sai…');
           const n = await aiFixIt(it, o, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
-          it.status = 'done'; if (n.applied) it.info += ` · AI đã sửa ${n.applied} chỗ`; if (n.error) it.warn = (it.warn ? it.warn + ' ' : '') + 'AI chưa sửa được (' + n.error.slice(0, 110) + ') – giữ kết quả Tesseract; bấm "✨ AI sửa lỗi OCR" để thử lại.';
+          it.status = 'done'; if (n.applied) it.info += ` · AI đã sửa ${n.applied} chỗ`; if (n.error) it.warn = (it.warn ? it.warn + ' ' : '') + 'AI chưa sửa được (' + n.error.slice(0, 110) + ') – giữ kết quả Tesseract; bấm "AI sửa lỗi OCR" để thử lại.';
         }
       } catch (e) { console.error(e); it.status = 'error'; it.error = e.message || String(e); }
       sync(it);
@@ -1342,7 +1349,10 @@ async function runQueue() {
 
 /* sự kiện */
 const drop = $('#drop'), pick = $('#pick');
-pick.onchange = () => { addFiles(pick.files); pick.value = ''; };
+pick.onchange = () => { addFiles(pick.files, { focus: items.length > 0 }); pick.value = ''; };
+$('#moreBtn').onclick = () => pick.click(); $('#moreCam').onclick = () => openCam();
+window.addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+window.addEventListener('drop', e => { if (e.defaultPrevented) return; if (e.dataTransfer?.files?.length) { e.preventDefault(); addFiles(e.dataTransfer.files, { focus: items.length > 0 }); } });
 ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
@@ -1352,7 +1362,7 @@ $('#docKind').onchange = () => { if ($('#docKind').value === 'free') { $('#embed
 $('#clear').onclick = () => { items.length = 0; $('#list').innerHTML = ''; summary(); };
 $('#dlAll').onclick = async () => {
   const zip = new JSZip(), btn = $('#dlAll'), used = new Set();
-  btn.disabled = true; btn.textContent = 'Đang nén…';
+  btn.disabled = true; setBtn(btn, 'download', 'Đang nén…');
   try {
     for (const it of items.filter(i => i.status === 'done')) {
       for (const f of [...new Set(['docx', 'docx30', 'mdraw', 'md', curFmt()])]) {
@@ -1363,7 +1373,7 @@ $('#dlAll').onclick = async () => {
       }
     }
     saveBlob(await zip.generateAsync({ type: 'blob' }), 'converted.zip');
-  } catch (e) { alert('Lỗi: ' + e.message); } finally { btn.textContent = 'Tải tất cả (.zip)'; btn.disabled = false; }
+  } catch (e) { alert('Lỗi: ' + e.message); } finally { setBtn(btn, 'download', 'Tải tất cả (.zip)'); btn.disabled = false; }
 };
 updateDlLabels();
 
@@ -1374,7 +1384,7 @@ async function copyText(t) {
 }
 async function polish(it) {
   const o = getOpts();
-  if (o.engine === 'tess' || !o.aiKey) { alert('Hãy chọn Gemini hoặc Claude và dán API key ở khung "🤖 AI".'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
+  if (o.engine === 'tess' || !o.aiKey) { alert('Hãy chọn Gemini hoặc Claude và dán API key ở khung "AI".'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
   const btn = it.ui.dlFix; btn.disabled = true; const old = it.ui.msg.textContent; it.ui.msg.className = 'msg'; it.ui.msg.textContent = 'AI đang sửa lỗi…';
   const n = await aiFixIt(it, o, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
   btn.disabled = false;
@@ -1408,19 +1418,19 @@ function fillModels(engine, list, selected) {
   const sel = $('#aiModel'), loaded = list.length > 0, best = bestModel(list);
   const base = loaded ? list : [...new Set([AI_DEFAULTS[engine], ...AI_FALLBACK[engine]])];
   const cur = selected && (loaded ? list.includes(selected) : true) ? selected : (best || base[0]);
-  const opts = base.map(m => `<option value="${m}">${m}${m === best ? '  ⭐ khuyên dùng' : ''}</option>`);
-  if (!loaded) opts.unshift('<option value="" disabled>— chưa tải danh sách: dán API key hoặc bấm ↻ —</option>');
+  const opts = base.map(m => `<option value="${m}">${m}${m === best ? '  khuyên dùng' : ''}</option>`);
+  if (!loaded) opts.unshift('<option value="" disabled>— chưa tải danh sách: dán API key hoặc bấm nút làm mới —</option>');
   sel.innerHTML = opts.join(''); sel.value = cur; store.set('dc_model_' + engine, cur);
 }
 async function loadModels(silent) {
   const b = $('#aiList'), o = aiOpts(); if (!o.aiKey) { if (!silent) alert('Hãy dán API key trước.'); return; }
-  b.disabled = true; b.textContent = '…';
+  b.disabled = true; b.replaceChildren('…');
   try {
     const list = await aiListModels(o); store.set('dc_models_' + o.engine, JSON.stringify(list));
     fillModels(o.engine, list, store.get('dc_model_' + o.engine));
     const st = $('#aiState'); st.textContent = `✓ Có ${list.length} model dùng được · đang chọn ${$('#aiModel').value}`; st.className = 'badge ok';
   } catch (e) { const st = $('#aiState'); st.textContent = '✗ ' + e.message.slice(0, 140); st.className = 'badge err'; }
-  finally { b.disabled = false; b.textContent = '↻'; }
+  finally { b.disabled = false; b.replaceChildren(ic('refresh')); }
 }
 $('#aiList').onclick = () => loadModels(false);
 let keyTimer = null;
@@ -1496,8 +1506,8 @@ function cleanSummaryHtml(raw) {
 }
 async function makeSummary(it) {
   const o = aiOpts();
-  if (o.engine === 'tess' || !o.aiKey) { alert('Tính năng này cần AI: chọn Gemini hoặc Claude và dán API key ở khung "🤖 AI" phía trên.'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
-  const box = it.ui.sum, btn = it.ui.dlSum; btn.disabled = true; btn.textContent = '🎨 AI đang thiết kế…';
+  if (o.engine === 'tess' || !o.aiKey) { alert('Tính năng này cần AI: chọn Gemini hoặc Claude và dán API key ở khung "AI" phía trên.'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
+  const box = it.ui.sum, btn = it.ui.dlSum; btn.disabled = true; setBtn(btn, 'palette', 'AI đang thiết kế…');
   box.className = 'msg'; box.textContent = 'AI đang dựng trang tóm tắt (30–90 giây)…';
   try {
     const text = toPlainMd(it.md).slice(0, 40000);
@@ -1510,12 +1520,12 @@ async function makeSummary(it) {
     const url = () => URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     box.append(
       el('div', { class: 'acts' },
-        el('button', { class: 'primary', onclick: () => saveBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${baseName(it.file.name)} - ${window.appI18n?.language === 'en' ? 'summary' : 'tom tat'}.html`) }, '⬇ Tải trang tóm tắt (.html)'),
+        el('button', { class: 'primary', onclick: () => saveBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${baseName(it.file.name)} - ${window.appI18n?.language === 'en' ? 'summary' : 'tom tat'}.html`) }, 'Tải trang tóm tắt (.html)'),
         el('button', { onclick: () => window.open(url(), '_blank') }, 'Mở tab mới / In → PDF'),
         el('button', { onclick: () => makeSummary(it) }, 'Làm lại')),
       fr);
   } catch (e) { box.className = 'msg err'; box.textContent = 'Không tạo được: ' + e.message; }
-  finally { btn.disabled = false; btn.textContent = '🎨 Tóm tắt trực quan'; }
+  finally { btn.disabled = false; setBtn(btn, 'palette', 'Tóm tắt trực quan'); }
 }
 
 /* ===== AI đối chiếu ảnh gốc ↔ văn bản OCR, chỉ ra chỗ có khả năng lỗi ===== */
@@ -1532,7 +1542,7 @@ function splitPages(md) {
 const toB64 = u8 => { let b = ''; for (let i = 0; i < u8.length; i += 8192) b += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(b); };
 async function reviewIt(it) {
   const o = aiOpts();
-  if (o.engine === 'tess' || !o.aiKey) { alert('Tính năng này cần AI: chọn Gemini hoặc Claude và dán API key ở khung "🤖 AI" phía trên.'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
+  if (o.engine === 'tess' || !o.aiKey) { alert('Tính năng này cần AI: chọn Gemini hoặc Claude và dán API key ở khung "AI" phía trên.'); $('#aiCard').scrollIntoView({ behavior: 'smooth' }); return; }
   const box = it.ui.review, btn = it.ui.dlRev; btn.disabled = true; box.className = 'msg'; box.textContent = 'AI đang đối chiếu…';
   const issues = [], pages = splitPages(it.md), lim = pages.slice(0, 12), errs = [];
   try {
@@ -1607,6 +1617,6 @@ function renderFixLog(it) {
   const box = it.ui.review; box.className = ''; box.innerHTML = '';
   if (!it.fixLog || !it.fixLog.length) { box.className = 'hidden'; return; }
   box.append(el('div', { class: 'msg' }, `AI đã sửa ${it.fixLog.length} chỗ (Tesseract → AI). Xem lại cho chắc:`),
-    el('div', { class: 'acts' }, el('button', { onclick: () => { it.md = it.mdBeforeAI; it.fixLog = []; it.mdBeforeAI = null; refreshTa(it); refreshPreview(it); showNd(it); renderFixLog(it); } }, '↩ Hoàn tác tất cả sửa của AI')));
+    el('div', { class: 'acts' }, el('button', { onclick: () => { it.md = it.mdBeforeAI; it.fixLog = []; it.mdBeforeAI = null; refreshTa(it); refreshPreview(it); showNd(it); renderFixLog(it); } }, ...ib('undo', 'Hoàn tác tất cả sửa của AI'))));
   it.fixLog.forEach(c => box.append(el('div', { class: 'rv' }, el('div', {}, `Tr.${c.page} · `, el('code', {}, c.where), ' → ', el('code', {}, c.fix)))));
 }

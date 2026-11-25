@@ -258,10 +258,52 @@ html[data-theme="dark"] .source-pane{background:#26201d}
   .export-actions button,.export-actions button.primary{flex:1 1 100%;min-height:46px}
   .source-review{padding:12px;border-radius:17px}.source-review-header{align-items:flex-start;flex-direction:column}.source-compare-grid{grid-template-columns:1fr}.source-image{max-height:55svh}.source-ocr-text{max-height:45svh;min-height:180px}
 }
+
+/* --- icon kiểu ArtWrite: nét 2px, bo tròn, theo màu chữ --- */
+.ic{width:1.18em;height:1.18em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+button{display:inline-flex;align-items:center;justify-content:center;gap:.55em}
+.side-actions button{justify-content:flex-start}
+h3 .ic,.aihead .ic{color:var(--accent)}
+.item-actions{margin-bottom:16px}
+.item-actions .side-actions{flex-direction:row;flex-wrap:wrap}
+.item-actions .side-actions button{width:auto;flex:1 1 auto;min-height:48px}
+.source-review{margin:18px 0 4px}
+.source-compare-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.source-pane{display:flex;flex-direction:column}
+.source-preview{height:min(78vh,1000px);min-height:420px;overflow:auto;background:#fff;color:#171717;border-radius:12px;padding:22px}
+.source-preview .preview-content{max-width:none}
+.source-image{max-height:min(78vh,1000px)}
+.add-more{display:inline-flex}
+@media(min-width:761px){.bar{position:sticky;top:10px;z-index:15;padding:8px 12px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 20px rgba(40,35,90,.08)}}
+@media(max-width:900px){.source-compare-grid{grid-template-columns:1fr}.source-preview{height:60svh;min-height:320px}}
 </style>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('dc_theme')==='dark'?'dark':'light'}catch{document.documentElement.dataset.theme='light'}</script>
 </head>
 <body>
+<svg id="icon-sprite" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7.5 6.5H5A2 2 0 0 0 3 8.5v9A2 2 0 0 0 5 19.5h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2.5z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+<symbol id="i-wand" viewBox="0 0 24 24"><path d="M4 20L16 8"/><path d="M14 6l4 4"/><path d="M6 5h2M7 4v2M18 15h2M19 14v2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.9 1.4-1.9-.3-1 .3-2.1 1.4-2.1H17a4 4 0 0 0 4-4C21 7 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+</defs></svg>
+
 <div class="wrap">
   <div class="toolbar" aria-label="Giao diện và ngôn ngữ">
     <button id="themeToggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Chuyển sang chế độ tối" title="Chuyển sang chế độ tối"><span class="theme-knob"></span>
@@ -279,15 +321,15 @@ html[data-theme="dark"] .source-pane{background:#26201d}
     <b>Kéo thả file vào đây</b>
     <p>pdf · docx · xlsx/xls/csv · pptx · html · epub · zip · json/xml/ipynb · txt/md · jpg/png/webp…<br>Có thể chọn nhiều file / nhiều ảnh cùng lúc.</p>
     <div class="big">
-      <button class="primary lg" id="camBtn">📷 Quét bằng camera</button>
-      <button class="lg" id="pickBtn">📁 Chọn file</button>
+      <button class="primary lg" id="camBtn"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg> Quét bằng camera</button>
+      <button class="lg" id="pickBtn"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg> Chọn file</button>
     </div>
     <input id="pick" type="file" multiple hidden>
     <input id="camNative" type="file" accept="image/*" capture="environment" hidden>
   </div>
 
   <div class="card" id="aiCard" style="margin-top:14px">
-    <div class="aihead"><b>🤖 AI – chính xác hơn, đọc được chữ viết tay, tóm tắt trực quan</b><span class="badge" id="aiState">Đang tắt</span></div>
+    <div class="aihead"><b><svg class="ic" aria-hidden="true"><use href="#i-sparkles"/></svg> AI – chính xác hơn, đọc được chữ viết tay, tóm tắt trực quan</b><span class="badge" id="aiState">Đang tắt</span></div>
     <div class="grid" style="margin-top:12px">
       <div>
         <label class="f" for="engine">Công cụ OCR &amp; AI</label>
@@ -299,12 +341,12 @@ html[data-theme="dark"] .source-pane{background:#26201d}
       </div>
       <div class="aiF"><label class="f" for="aiMode">Cách dùng AI</label>
         <select id="aiMode">
-          <option value="fix" selected>Tesseract đọc trước, AI chỉ sửa chỗ sai (nhanh, tiết kiệm token) ⭐</option>
+          <option value="fix" selected>Tesseract đọc trước, AI chỉ sửa chỗ sai (nhanh, tiết kiệm token)</option>
           <option value="full">AI đọc toàn bộ ảnh (chậm, tốn token; tốt nhất cho chữ viết tay)</option>
         </select></div>
       <div class="aiF"><label class="f" for="aiKey">API key</label>
-        <div class="row"><input id="aiKey" type="password" autocomplete="off" placeholder="Dán API key vào đây"><button id="aiShow" type="button" title="Hiện/ẩn key">👁</button></div></div>
-      <div class="aiF"><label class="f" for="aiModel">Chọn model AI (tự tải danh sách khi có key)</label><div class="row"><select id="aiModel"></select><button id="aiList" type="button" title="Tải lại danh sách model">↻</button></div></div>
+        <div class="row"><input id="aiKey" type="password" autocomplete="off" placeholder="Dán API key vào đây"><button id="aiShow" type="button" title="Hiện/ẩn key"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div></div>
+      <div class="aiF"><label class="f" for="aiModel">Chọn model AI (tự tải danh sách khi có key)</label><div class="row"><select id="aiModel"></select><button id="aiList" type="button" title="Tải lại danh sách model"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button></div></div>
       <div class="aiF"><label class="f">&nbsp;</label><button id="aiTest" type="button" style="width:100%">Kiểm tra key</button></div>
     </div>
     <div class="aiF aihelp">Lấy key: <b>Gemini</b> → <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (có gói miễn phí) · <b>Claude</b> → <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
@@ -375,8 +417,10 @@ html[data-theme="dark"] .source-pane{background:#26201d}
   <div class="bar hidden" id="bar">
     <span class="msg" id="sum"></span>
     <span class="sp"></span>
-    <button id="clear">Xoá danh sách</button>
-    <button id="dlAll" class="primary" disabled>Tải tất cả (.zip)</button>
+    <button id="moreBtn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg> Thêm file</button>
+    <button id="moreCam"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg> Quét camera</button>
+    <button id="clear"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg> Xoá danh sách</button>
+    <button id="dlAll" class="primary" disabled><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Tải tất cả (.zip)</button>
   </div>
 
   <div id="list"></div>
@@ -390,7 +434,7 @@ html[data-theme="dark"] .source-pane{background:#26201d}
   <div class="cnt" id="camCnt">Đặt tài liệu vào khung, giữ máy thẳng và đủ sáng</div>
   <video id="camVideo" playsinline muted autoplay></video>
   <div class="guide"></div><div class="flash" id="camFlash"></div>
-  <label class="camsave"><input type="checkbox" id="camSave" checked> 💾 Lưu ảnh vào thư viện máy khi bấm Xong</label>
+  <label class="camsave"><input type="checkbox" id="camSave" checked> <svg class="ic" aria-hidden="true"><use href="#i-save"/></svg> Lưu ảnh vào thư viện máy khi bấm Xong</label>
   <div class="ctl">
     <button id="camClose">Huỷ</button>
     <img class="thumb hidden" id="camThumb" alt="">
