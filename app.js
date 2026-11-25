@@ -564,7 +564,7 @@ function viProcess(it, o) { // tự sửa âm tiết vô nghĩa (chỉ khi có �
     if (it.ocrPages ? it.ocrPages.includes(pg.n) : it.isOcr) {
       if (!useAiOcr(o)) md = mdTextMap(md, x => { const r = VI.autoCorrect(x); r.changes.forEach(c => log.push({ page: pg.n, where: c.orig, fix: c.fixed, src: 'vi' })); return r.text; });
       const txt = mdPlainText(md), q = VI.validRatio(txt);
-      it.viPage[pg.n] = { ratio: q.ratio, total: q.total, sym: VI.symbolSuspects(txt).length, risky: /<table|\|/.test(md) || (md.match(/\d/g) || []).length >= 12 };
+      it.viPage[pg.n] = { ratio: q.ratio, total: q.total, sym: VI.symbolSuspects(txt).length + VI.asciiSuspects(txt).length, risky: /<table|\|/.test(md) || (md.match(/\d/g) || []).length >= 12 };
       tot += q.total; ok += q.valid; if (q.total >= 20 && q.ratio < 0.85) low.push(pg.n);
     }
     out.push({ n: pg.n, md });
@@ -581,6 +581,7 @@ function viMark(root) { // tô sáng trong Xem trước: âm tiết lạ (vàng)
     if (cnt > 1500) break;
     const t = node.nodeValue; if (t.length < 2) continue;
     const ms = [...VI.scan(t).map(x => ({ s: x.start, e: x.end, c: 'vi-sus', tip: x.suggestion ? 'Gợi ý: ' + x.suggestion : 'Âm tiết lạ – có thể OCR sai' })),
+      ...VI.asciiSuspects(t).map(x => ({ s: x.start, e: x.end, c: 'vi-sus', tip: 'Chữ không dấu vô nghĩa – có thể OCR nhầm/mất dấu' })),
       ...VI.symbolSuspects(t).filter(x => !/ngoặc đơn/.test(x.reason)).map(x => ({ s: x.start, e: x.end, c: 'vi-sym', tip: x.reason }))].sort((a, b) => a.s - b.s);
     if (!ms.length) continue;
     const f = document.createDocumentFragment(); let at = 0;
@@ -911,8 +912,8 @@ function ensureMathJax() {
 async function mathSvg(tex, display) {
   const key = (display ? 'D' : 'I') + tex; let e = MATH.get(key); if (e && e.node) return e;
   await ensureMathJax();
-  const node = await MathJax.tex2svgPromise(tex, { display }); node.querySelectorAll('mjx-assistive-mml').forEach(n => n.remove()); const svg = node.querySelector('svg'); // bỏ MathML ẩn (nếu để lại sẽ hiện chữ trùng lặp)
-  e = { node, svg: svg ? svg.outerHTML : '' }; MATH.set(key, e); return e;
+  const node = await MathJax.tex2svgPromise(tex, { display }); let mml = ''; try { mml = MathJax.tex2mml(tex, { display }).replace(/\n\s*/g, ''); } catch { } node.querySelectorAll('mjx-assistive-mml').forEach(n => n.remove()); const svg = node.querySelector('svg'); // bỏ MathML ẩn (nếu để lại sẽ hiện chữ trùng lặp)
+  e = { node, svg: svg ? svg.outerHTML : '', mml }; MATH.set(key, e); return e;
 }
 async function mathPng(key, e) { // SVG -> PNG (3x) + kích thước px ở cỡ chữ 16px
   if (e.png || !e.node) return;
@@ -932,9 +933,21 @@ async function mathPrepare(doc, wantPng) { // gọi trước khi xuất Word/HTM
     for (const s of sp) { const e = await mathSvg(s.getAttribute('data-tex'), s.getAttribute('data-display') === '1'); if (wantPng) await mathPng(mathKey(s), e); }
   } catch (err) { console.warn('Không dựng được công thức:', err.message); }
 }
+let mathPop = null;
+const closeMathPop = () => { if (mathPop) { mathPop.remove(); mathPop = null; } };
+function openMathPop(sp) { // bấm vào công thức trong Xem trước → sao chép LaTeX / MathML (dán vào Word: Alt+= rồi Ctrl+V)
+  closeMathPop();
+  const tex = sp.getAttribute('data-tex'), e = MATH.get(mathKey(sp)), r = sp.getBoundingClientRect();
+  const mk = (label, val) => { const b = el('button', {}, ...ib('copy', label)); b.disabled = !val; b.onclick = async () => { await copyText(val); b.replaceChildren(...ib('check', 'Đã chép')); setTimeout(closeMathPop, 700); }; return b; };
+  mathPop = el('div', { class: 'math-pop', role: 'dialog' }, el('code', {}, tex.length > 70 ? tex.slice(0, 67) + '…' : tex), el('div', { class: 'acts' }, mk('Sao chép LaTeX', tex), mk('Sao chép MathML', e && e.mml)));
+  document.body.append(mathPop);
+  const w = mathPop.offsetWidth; mathPop.style.left = Math.max(8, Math.min(window.scrollX + r.left, window.scrollX + document.documentElement.clientWidth - w - 8)) + 'px'; mathPop.style.top = (window.scrollY + r.bottom + 6) + 'px';
+}
+document.addEventListener('click', ev => { const sp = ev.target.closest && ev.target.closest('.preview-doc span.math[data-done]'); if (mathPop && mathPop.contains(ev.target)) return; if (sp) { ev.preventDefault(); openMathPop(sp); } else closeMathPop(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeMathPop(); });
 function renderMathIn(root) { // xem trước: thay chữ LaTeX bằng SVG khi MathJax sẵn sàng
   const sp = [...root.querySelectorAll('span.math[data-tex]:not([data-done])')]; if (!sp.length) return;
-  sp.forEach(s => mathSvg(s.getAttribute('data-tex'), s.getAttribute('data-display') === '1').then(e => { s.replaceChildren(e.node.cloneNode(true)); s.setAttribute('data-done', '1'); s.setAttribute('aria-label', s.getAttribute('data-tex')); }).catch(() => { }));
+  sp.forEach(s => mathSvg(s.getAttribute('data-tex'), s.getAttribute('data-display') === '1').then(e => { s.replaceChildren(e.node.cloneNode(true)); s.setAttribute('data-done', '1'); s.setAttribute('aria-label', s.getAttribute('data-tex')); s.title = 'Bấm để sao chép công thức'; }).catch(() => { }));
 }
 function mathRun(span) { // ảnh công thức cho Word (cỡ ~17px ≈ 13pt)
   const e = MATH.get(mathKey(span)); if (!e || !e.png) return null; const k = 17 / 16;
@@ -1283,8 +1296,8 @@ function renderItem(it) {
   ta.addEventListener('input', () => onPlainInput(it));
   taMd.addEventListener('input', () => { it.md = fromEdit(taMd.value); it.plain = plainMap(it.md); ta.value = it.plain.text; refreshPreview(it); showNd(it); });
   const pv = el('div', { class: 'pv preview-doc hidden' });
-  const tabTx = el('button', { onclick: () => tab('text') }, ...ib('file', 'Văn bản (sửa được)'));
-  const tabPv = el('button', { class: 'on', onclick: () => tab('pv') }, ...ib('eye', 'Xem trước'));
+  const tabTx = el('button', { class: 'on', onclick: () => tab('text') }, ...ib('file', 'Văn bản (sửa được)'));
+  const tabPv = el('button', { onclick: () => tab('pv') }, ...ib('eye', 'Xem trước'));
   const tabAdv = el('button', { onclick: () => tab('md') }, ...ib('code', 'Markdown + bố cục'));
   const sourceImage = el('img', { class: 'source-image', alt: 'Ảnh gốc' });
   const sourcePreview = el('div', { class: 'source-preview preview-doc' });
@@ -1352,7 +1365,7 @@ function renderItem(it) {
     el('div', { class: 'item-toolbar' }, quickPanel, viewPanel),
     el('div', { class: 'item-toolbar item-actions' }, aiSection, manageSection),
     documentPanel, sourceReview, exportPanel);
-  tab('pv');
+  tab('text');
   return el('div', { class: 'card result-card' },
     el('div', { class: 'file-h' }, el('span', { class: 'name' }, it.file.name), el('span', { class: 'badge' }, fmtSize(it.file.size)), it.ui.badge),
     it.ui.prog, it.ui.msg, it.ui.result);
@@ -1460,7 +1473,7 @@ async function runQueue() {
         if (it.isOcr || (it.ocrPages && it.ocrPages.length)) it.info += viProcess(it, o);
         if (o.engine !== 'tess' && o.aiKey && !useAiOcr(o) && (r.isOcr || (r.ocrPages && r.ocrPages.length)) && r.md.trim()) {
           it.status = 'run'; sync(it); progress(1, 'Tesseract xong – AI đang sửa chỗ sai…');
-          const n = await aiFixIt(it, { ...o, skipClean: true }, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
+          const n = await aiFixIt(it, { ...o, skipClean: $('#viSkip').checked }, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
           it.status = 'done'; if (n.applied) it.info += ` · AI đã sửa ${n.applied} chỗ`; if (n.skipped) it.info += ` · bỏ qua AI ${n.skipped} trang sạch`; if (n.error) it.warn = (it.warn ? it.warn + ' ' : '') + 'AI chưa sửa được (' + n.error.slice(0, 110) + ') – giữ kết quả Tesseract; bấm "AI sửa lỗi OCR" để thử lại.';
         }
       } catch (e) { console.error(e); it.status = 'error'; it.error = e.message || String(e); }

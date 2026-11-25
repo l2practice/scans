@@ -169,5 +169,28 @@
     return out.sort((a, b) => a.start - b.start);
   }
 
-  root.VI = { init, ready, size, tokenize, isValid, suggest, scan, autoCorrect, validRatio, symbolSuspects, weightedED, runeCost, isProtectable, matchCase };
+
+  // Chuỗi chữ Latin KHÔNG dấu, ngắn, không phải âm tiết Việt cũng không phải từ Anh/viết tắt thông dụng, nằm trong đoạn chủ yếu là tiếng Việt
+  // → thường là chữ bị OCR nhầm/mất dấu (chav ← chạy, md ← mô, thyt ← thụt). Không bắt được từ vẫn hợp lệ khi mất dấu (dan ← dán, anh ← ảnh).
+  const EN_OK = new Set(('a an and any app are as at be but by can css csv do doc docx email epub file for from get has have he her his how html http https id if in is it its json key link '
+    + 'me my new no not now of off on one or our out pdf pptx pt qr see she so ssl text the to too txt url use via was we web who why will with word xml xlsx xls ipynb yes you your zip '
+    + 'cm mm kg km ml vs vd vn vnd usd tp tt ts ths gs pgs gv sv hs qd nd tw hdnd ubnd ocr ai ui ux ok wifi pc mb gb kb ppt tel fax stt tb vv').split(/\s+/));
+  function asciiSuspects(text) {
+    if (!ready() || !text) return [];
+    const toks = tokenize(text); let viet = 0; for (const t of toks) if (hasViet(t.token)) viet++;
+    if (viet < 3 || viet < toks.length * 0.3) return [];
+    const out = [];
+    for (const t of toks) {
+      const w = t.token, n = w.length;
+      if (n < 2 || n > 5 || /[^A-Za-z]/.test(w) || isValid(w)) continue;
+      if (w !== w.toLowerCase() && !(w.slice(1) === w.slice(1).toLowerCase() && /(^|[.!?:;]\s*|\n\s*)$/.test(text.slice(0, t.start)))) continue; // IN HOA / Tên riêng giữa câu: bỏ qua
+      if (EN_OK.has(w.toLowerCase())) continue;
+      const p = text[t.start - 1], q = text[t.end];
+      if ((p && /[\d./@_\-:\\#]/.test(p)) || (q && /[\d./@_\-:\\#]/.test(q))) continue;       // dính số, đường dẫn, email, mã
+      out.push({ ...t, ascii: true });
+    }
+    return out;
+  }
+
+  root.VI = { asciiSuspects, init, ready, size, tokenize, isValid, suggest, scan, autoCorrect, validRatio, symbolSuspects, weightedED, runeCost, isProtectable, matchCase };
 })(typeof window !== 'undefined' ? window : globalThis);
