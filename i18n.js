@@ -1,7 +1,7 @@
 /* UI translations only. OCR text, filenames, and document previews are left untouched. */
 (() => {
   const viToEn = {
-    'Chủ đề':'Theme','Ngôn ngữ':'Language','Giao diện và ngôn ngữ':'Theme and language','Sáng':'Light','Tối':'Dark',
+    'Tô sáng chỗ nghi sai trong Xem trước':'Highlight suspected errors in Preview','Vàng: âm tiết tiếng Việt không hợp lệ (rê chuột xem gợi ý). Đỏ: ký hiệu lạ. Chỉ để soát mắt, không đưa vào file tải về.':'Yellow: invalid Vietnamese syllable (hover for a suggestion). Red: unusual symbol. For visual review only; never included in downloaded files.','Chủ đề':'Theme','Ngôn ngữ':'Language','Giao diện và ngôn ngữ':'Theme and language','Sáng':'Light','Tối':'Dark',
     'Chuyển PDF, Word, Excel, PowerPoint, HTML, EPUB, ZIP, ảnh… sang Markdown / Word / HTML / TXT / JSON / Excel. PDF scan hoặc ảnh chụp công văn sẽ tự OCR (tiếng Việt). Xử lý ngay trong trình duyệt.':'Convert PDF, Word, Excel, PowerPoint, HTML, EPUB, ZIP, and images to Markdown, Word, HTML, TXT, JSON, or Excel. Scanned PDFs and document photos are OCR-processed in your browser.',
     'Kéo thả file vào đây':'Drop files here','pdf · docx · xlsx/xls/csv · pptx · html · epub · zip · json/xml/ipynb · txt/md · jpg/png/webp…':'pdf · docx · xlsx/xls/csv · pptx · html · epub · zip · json/xml/ipynb · txt/md · jpg/png/webp…','Có thể chọn nhiều file / nhiều ảnh cùng lúc.':'Select multiple files or images at once.',
     'Quét bằng camera':'Scan with camera','Chọn file':'Choose files',
@@ -78,6 +78,17 @@
     [/^AI đã sửa (\d+) chỗ$/,(_,n)=>`AI fixed ${n} item(s)`],
     [/^AI nghi ngờ (\d+) chỗ$/,(_,n)=>`AI flagged ${n} item(s)`],
     [/^AI đang đối chiếu & sửa lỗi trang (\d+)\/(\d+)…$/,(_,n,t)=>`AI is checking and fixing page ${n}/${t}…`],
+    [/^tự sửa (\d+) âm tiết$/,(_,n)=>`auto-corrected ${n} syllable(s)`],
+    [/^chính tả ~(\d+)%$/,(_,n)=>`spelling ~${n}% valid`],
+    [/^bỏ qua AI (\d+) trang sạch$/,(_,n)=>`AI skipped ${n} clean page(s)`],
+    [/^trang ([\d, ]+) lỗi mã hoá chữ → đã OCR lại$/,(_,n)=>`page(s) ${n}: broken text layer → re-OCR'd`],
+    [/^Trang ([\d, ]+) có nhiều âm tiết lạ – hãy soát lại\.$/,(_,n)=>`Page(s) ${n} contain many unusual syllables – please review.`],
+    [/^Đã tự sửa (\d+) chỗ \(từ điển: (\d+), AI: (\d+)\)\. Xem lại cho chắc:$/,(_,n,v,a)=>`Auto-corrected ${n} item(s) (dictionary: ${v}, AI: ${a}). Review the changes:`],
+    [/^(\d+) trang$/,(_,n)=>`${n} page(s)`],
+    [/^(\d+) trang OCR$/,(_,n)=>`${n} OCR page(s)`],
+    [/^(\d+) bảng$/,(_,n)=>`${n} table(s)`],
+    [/^độ tin cậy ~([\d.]+)%$/,(_,n)=>`confidence ~${n}%`],
+    [/^AI đã sửa (\d+) chỗ$/,(_,n)=>`AI fixed ${n} item(s)`],
   ];
   const excluded = 'textarea,iframe,pre,code,script,style,.file-h .name,.preview-doc,.document-canvas,.source-file-name'; // nội dung tài liệu/OCR không bao giờ được dịch
   const originalText = new WeakMap();
@@ -88,6 +99,7 @@
     const map = target === 'en' ? viToEn : enToVi;
     if (Object.prototype.hasOwnProperty.call(map, value)) return map[value];
     if (target === 'en') for (const [re, out] of dynamic) if (re.test(value)) return typeof out === 'function' ? out(...value.match(re)) : out;
+    if (target === 'en' && value.includes(' · ')) { const parts = value.split(' · '), tr = parts.map(x => translate(x, 'en')); if (tr.some((x, i) => x !== parts[i])) return tr.join(' · '); } // dòng thông tin ghép nhiều phần
     return value;
   }
   function translateTextNode(node) {

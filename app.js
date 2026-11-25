@@ -550,10 +550,53 @@ async function pdfPageLines(page, tc) {
   return { lines: lines.filter(l => l.segs.length), body: top ? +top[0] : 10, W };
 }
 
+/* ================= Kiểm tra âm tiết tiếng Việt (vi-syllables.js + vi-data.js) ================= */
+let viOk = false;
+function viReady() { if (!viOk && window.VI && globalThis.VI_DATA) { try { VI.init(globalThis.VI_DATA.syllables); viOk = VI.ready(); } catch (e) { console.error(e); } } return viOk; }
+const mdTextMap = (md, fn) => md.split(/(<!--[\s\S]*?-->|<[^>]+>)/).map((x, i) => i % 2 ? x : fn(x)).join(''); // chỉ đụng vào chữ, giữ nguyên thẻ/chú thích
+const mdPlainText = md => md.replace(/<!--[\s\S]*?-->|<[^>]+>/g, ' ');
+const joinPages = (it, out, marks) => ((marks ? out.map(p => `<!-- Trang ${p.n} -->\n\n${p.md}`).join('\n\n') : out[0].md).trim() + '\n');
+function viProcess(it, o) { // tự sửa âm tiết vô nghĩa (chỉ khi có ứng viên duy nhất) + đo chất lượng từng trang OCR
+  it.viPage = {}; if (!viReady() || !it.md.trim()) return '';
+  const marks = /<!--\s*Trang\s+\d+\s*-->/.test(it.md), pages = splitPages(it.md), log = [], out = []; let tot = 0, ok = 0; const low = [];
+  for (const pg of pages) {
+    let md = pg.md;
+    if (it.ocrPages ? it.ocrPages.includes(pg.n) : it.isOcr) {
+      if (!useAiOcr(o)) md = mdTextMap(md, x => { const r = VI.autoCorrect(x); r.changes.forEach(c => log.push({ page: pg.n, where: c.orig, fix: c.fixed, src: 'vi' })); return r.text; });
+      const txt = mdPlainText(md), q = VI.validRatio(txt);
+      it.viPage[pg.n] = { ratio: q.ratio, total: q.total, sym: VI.symbolSuspects(txt).length, risky: /<table|\|/.test(md) || (md.match(/\d/g) || []).length >= 12 };
+      tot += q.total; ok += q.valid; if (q.total >= 20 && q.ratio < 0.85) low.push(pg.n);
+    }
+    out.push({ n: pg.n, md });
+  }
+  if (log.length) { it.mdBeforeAI = it.mdBeforeAI || it.md; it.md = joinPages(it, out, marks); it.fixLog = [...(it.fixLog || []), ...log]; renderFixLog(it); }
+  if (low.length) it.warn = ((it.warn || '') + ` Trang ${low.join(', ')} có nhiều âm tiết lạ – hãy soát lại.`).trim();
+  return (log.length ? ` · tự sửa ${log.length} âm tiết` : '') + (tot >= 20 ? ` · chính tả ~${Math.round(ok / tot * 100)}%` : '');
+}
+function viMark(root) { // tô sáng trong Xem trước: âm tiết lạ (vàng) và ký hiệu đáng ngờ (đỏ); không đụng tới file xuất
+  if (!viReady()) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = []; let n, cnt = 0;
+  while ((n = w.nextNode())) if (!n.parentElement.closest('pre,code,.math,mjx-container')) nodes.push(n);
+  for (const node of nodes) {
+    if (cnt > 1500) break;
+    const t = node.nodeValue; if (t.length < 2) continue;
+    const ms = [...VI.scan(t).map(x => ({ s: x.start, e: x.end, c: 'vi-sus', tip: x.suggestion ? 'Gợi ý: ' + x.suggestion : 'Âm tiết lạ – có thể OCR sai' })),
+      ...VI.symbolSuspects(t).filter(x => !/ngoặc đơn/.test(x.reason)).map(x => ({ s: x.start, e: x.end, c: 'vi-sym', tip: x.reason }))].sort((a, b) => a.s - b.s);
+    if (!ms.length) continue;
+    const f = document.createDocumentFragment(); let at = 0;
+    for (const m of ms) {
+      if (m.s < at) continue; cnt++;
+      if (m.s > at) f.append(t.slice(at, m.s));
+      f.append(el('mark', { class: m.c, title: m.tip }, t.slice(m.s, m.e))); at = m.e;
+    }
+    if (at < t.length) f.append(t.slice(at));
+    node.replaceWith(f);
+  }
+}
 async function convertPdf(file, ctx) {
   const { opts, progress } = ctx;
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  const parts = [], pagePics = {}, ocrList = []; let ocrPages = 0, confSum = 0, confN = 0, lowPages = [], nTables = 0;
+  const parts = [], pagePics = {}, ocrList = [], badLayer = []; let ocrPages = 0, confSum = 0, confN = 0, lowPages = [], nTables = 0;
   for (let n = 1; n <= pdf.numPages; n++) {
     const base = (n - 1) / pdf.numPages, span = 1 / pdf.numPages;
     progress(base, `Trang ${n}/${pdf.numPages}`);
@@ -564,7 +607,8 @@ async function convertPdf(file, ctx) {
       const pl = await pdfPageLines(page, tc);
       md = layoutToMd(pl.lines, pl.W, { rich: opts.layout, keepBr: opts.keepBr, body: pl.body });
     }
-    const hasText = md.replace(/<[^>]+>|\s|[#\-]/g, '').length >= 25;
+    let hasText = md.replace(/<[^>]+>|\s|[#\-]/g, '').length >= 25;
+    if (hasText && opts.ocrMode === 'auto' && viReady()) { const q = VI.validRatio(mdPlainText(md)); if (q.total >= 20 && q.ratio < 0.85) { hasText = false; badLayer.push(n); } } // lớp chữ của PDF hỏng mã hoá → OCR lại
     if (opts.ocrMode === 'force' || (!hasText && opts.ocrMode === 'auto')) {
       progress(base, `Trang ${n}/${pdf.numPages}: đang OCR…`);
       const vp0 = page.getViewport({ scale: 1 });
@@ -591,6 +635,7 @@ async function convertPdf(file, ctx) {
   const text = parts.join('\n\n');
   const body = text.replace(/<!--.*?-->/g, '').trim();
   if (nTables) info += ` · ${nTables} bảng`;
+  if (badLayer.length) info += ` · trang ${badLayer.join(', ')} lỗi mã hoá chữ → đã OCR lại`;
   return { pagePics, ocrPages: ocrList, md: text, info, warn: body ? warn : 'Không trích được chữ nào. Thử chế độ "Luôn OCR mọi trang".' };
 }
 
@@ -1272,6 +1317,7 @@ function renderPreviewInto(it, target) {
     });
     if (wide) body.classList.add('has-wide');
     if (!body.textContent.trim() && it.md.trim()) body.append(el('pre', {}, it.plain ? it.plain.text : '')); // không bao giờ để khung trống nếu có chữ
+    if (document.getElementById('viMark')?.checked && (it.isOcr || (it.ocrPages && it.ocrPages.length))) viMark(body);
     target.replaceChildren(body);
   } catch (e) { target.textContent = e.message; }
 }
@@ -1333,13 +1379,14 @@ async function runQueue() {
       try {
         const ctx = { opts: getOpts(), progress };
         const r = it.files ? await convertMany(it.files, ctx) : await convertFile(it.file, ctx);
-        it.pics = r.pics || null; it.pagePics = r.pagePics || null; it.ocrPages = r.ocrPages || null; it.md = (r.md || '').trim() + '\n'; it.info = r.info || ''; it.warn = r.warn || ''; it.status = 'done';
+        it.pics = r.pics || null; it.pagePics = r.pagePics || null; it.ocrPages = r.ocrPages || null; it.isOcr = !!r.isOcr; it.fixLog = []; it.mdBeforeAI = null; it.md = (r.md || '').trim() + '\n'; it.info = r.info || ''; it.warn = r.warn || ''; it.status = 'done';
         if (!r.md.trim() && !it.warn) it.warn = 'Kết quả trống.';
         const o = ctx.opts;
+        if (it.isOcr || (it.ocrPages && it.ocrPages.length)) it.info += viProcess(it, o);
         if (o.engine !== 'tess' && o.aiKey && !useAiOcr(o) && (r.isOcr || (r.ocrPages && r.ocrPages.length)) && r.md.trim()) {
           it.status = 'run'; sync(it); progress(1, 'Tesseract xong – AI đang sửa chỗ sai…');
-          const n = await aiFixIt(it, o, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
-          it.status = 'done'; if (n.applied) it.info += ` · AI đã sửa ${n.applied} chỗ`; if (n.error) it.warn = (it.warn ? it.warn + ' ' : '') + 'AI chưa sửa được (' + n.error.slice(0, 110) + ') – giữ kết quả Tesseract; bấm "AI sửa lỗi OCR" để thử lại.';
+          const n = await aiFixIt(it, { ...o, skipClean: true }, (k, t) => { it.ui.msg.textContent = `AI đang đối chiếu & sửa lỗi trang ${k + 1}/${t}…`; });
+          it.status = 'done'; if (n.applied) it.info += ` · AI đã sửa ${n.applied} chỗ`; if (n.skipped) it.info += ` · bỏ qua AI ${n.skipped} trang sạch`; if (n.error) it.warn = (it.warn ? it.warn + ' ' : '') + 'AI chưa sửa được (' + n.error.slice(0, 110) + ') – giữ kết quả Tesseract; bấm "AI sửa lỗi OCR" để thử lại.';
         }
       } catch (e) { console.error(e); it.status = 'error'; it.error = e.message || String(e); }
       sync(it);
@@ -1410,6 +1457,7 @@ function applyEngine() {
   else { st.textContent = name + ' · thiếu API key'; st.className = 'badge warn'; }
 }
 $('#engine').value = store.get('dc_engine') || 'tess';
+$('#viMark').checked = store.get('dc_vimark') !== '0'; $('#viMark').onchange = () => { store.set('dc_vimark', $('#viMark').checked ? '1' : '0'); items.forEach(i => refreshPreview(i, true)); };
 $('#engine').onchange = () => { store.set('dc_engine', $('#engine').value); applyEngine(); if ($('#engine').value !== 'tess' && $('#aiKey').value.trim().length >= 20 && !aiModelList($('#engine').value).length) loadModels(true); };
 $('#aiKey').oninput = () => { store.set('dc_key_' + $('#engine').value, $('#aiKey').value.trim()); const k = $('#aiKey').value.trim(); const sv = $('#aiModel').value; const st = $('#aiState'); applyEngineState(); clearTimeout(keyTimer); if (k.length >= 20) keyTimer = setTimeout(() => loadModels(true), 700); };
 const bestModel = list => list.filter(m => /flash|haiku|sonnet/i.test(m) && !/lite|image|tts|live|audio|embed|robot|vision|preview|exp/i.test(m))[0]
@@ -1588,11 +1636,13 @@ function fixPrompt(hasImg) {
 }
 function parseJsonArray(raw) { try { const a = raw.indexOf('['), b = raw.lastIndexOf(']'); const v = JSON.parse(raw.slice(a, b + 1)); return Array.isArray(v) ? v : []; } catch { return []; } }
 async function aiFixIt(it, o, onProg) {
-  const marks = /<!--\s*Trang\s+\d+\s*-->/.test(it.md), pages = splitPages(it.md), changes = [], out = []; let error = '', stop = false;
+  const marks = /<!--\s*Trang\s+\d+\s*-->/.test(it.md), pages = splitPages(it.md), changes = [], out = []; let error = '', stop = false, skipped = 0;
   it.mdBeforeAI = it.mdBeforeAI || it.md;
   for (const [k, pg] of pages.entries()) {
     const isOcr = it.ocrPages ? it.ocrPages.includes(pg.n) : true;
     if (stop || !isOcr || !pg.md.trim()) { out.push(pg); continue; }
+    const vq = it.viPage && it.viPage[pg.n]; // trang sạch (≥98% âm tiết hợp lệ, không ký hiệu lạ, không bảng/nhiều số) thì khỏi tốn lượt AI
+    if (o.skipClean && vq && vq.total >= 40 && vq.ratio >= 0.98 && !vq.sym && !vq.risky) { out.push(pg); skipped++; continue; }
     onProg && onProg(k, pages.length);
     const pic = (it.pagePics && it.pagePics[pg.n]) || (it.pics && it.pics[pg.n - 1]);
     let txt = toEdit(pg.md), n0 = changes.length;
@@ -1607,16 +1657,17 @@ async function aiFixIt(it, o, onProg) {
     } catch (e) { error = e.message; stop = true; out.push(pg); }
   }
   if (changes.length) {
-    it.md = (marks ? out.map(p => `<!-- Trang ${p.n} -->\n\n${p.md}`).join('\n\n') : out[0].md).trim() + '\n';
+    it.md = joinPages(it, out, marks);
     refreshTa(it); refreshPreview(it); showNd(it);
   }
   it.fixLog = [...(it.fixLog || []), ...changes]; renderFixLog(it);
-  return { applied: changes.length, error };
+  return { applied: changes.length, error, skipped };
 }
 function renderFixLog(it) {
   const box = it.ui.review; box.className = ''; box.innerHTML = '';
   if (!it.fixLog || !it.fixLog.length) { box.className = 'hidden'; return; }
-  box.append(el('div', { class: 'msg' }, `AI đã sửa ${it.fixLog.length} chỗ (Tesseract → AI). Xem lại cho chắc:`),
+  const nv = it.fixLog.filter(c => c.src === 'vi').length, na = it.fixLog.length - nv;
+  box.append(el('div', { class: 'msg' }, nv ? `Đã tự sửa ${it.fixLog.length} chỗ (từ điển: ${nv}, AI: ${na}). Xem lại cho chắc:` : `AI đã sửa ${it.fixLog.length} chỗ (Tesseract → AI). Xem lại cho chắc:`),
     el('div', { class: 'acts' }, el('button', { onclick: () => { it.md = it.mdBeforeAI; it.fixLog = []; it.mdBeforeAI = null; refreshTa(it); refreshPreview(it); showNd(it); renderFixLog(it); } }, ...ib('undo', 'Hoàn tác tất cả sửa của AI'))));
-  it.fixLog.forEach(c => box.append(el('div', { class: 'rv' }, el('div', {}, `Tr.${c.page} · `, el('code', {}, c.where), ' → ', el('code', {}, c.fix)))));
+  it.fixLog.forEach(c => box.append(el('div', { class: 'rv' }, el('div', {}, `Tr.${c.page} · `, c.src === 'vi' ? '📖 ' : '', el('code', {}, c.where), ' → ', el('code', {}, c.fix)))));
 }
