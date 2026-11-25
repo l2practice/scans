@@ -47,4 +47,13 @@ t('symbolSuspects: ký hiệu lạ, lẫn chữ-số, ngoặc lệch', () => {
   assert.ok(/ký hiệu lạ/.test(reasons)); assert.ok(/ngoặc/.test(reasons));
 });
 t('chưa nạp dữ liệu → không làm gì (an toàn)', () => { VI.init(''); assert.equal(VI.ready(), false); assert.deepEqual(VI.scan('nguời'), []); assert.equal(VI.autoCorrect('nguời').text, 'nguời'); });
+
+t('asciiSuspects: chữ Latin không dấu vô nghĩa trong đoạn tiếng Việt', () => {
+  VI.init('chạy mô hình offline sau đó dán chọn tiếng việt thụt đầu dòng người được lưu ảnh gốc trước khi');
+  const f = x => VI.asciiSuspects(x).map(s => s.token);
+  assert.deepEqual(f('Lần đầu sẽ nạp mô hình (chav offline sau đó). Kết quả được lưu'), ['chav']);
+  assert.deepEqual(f('Lần đầu sẽ nạp md hình, thyt đầu dòng, người được lưu ảnh'), ['md', 'thyt']);
+  assert.deepEqual(f('Giữ file zip, cỡ 13 pt, mở API key, trang dnu.edu.vn, Gemini, OCR'), []);   // từ Anh/viết tắt/URL/tên riêng không bị bắt
+  assert.deepEqual(f('the quick brown fox chav jumps over'), []);                                   // đoạn tiếng Anh: bỏ qua
+});
 console.log(`\n${pass} test đạt`);
