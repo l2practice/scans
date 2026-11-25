@@ -172,25 +172,49 @@
 
   // Chuỗi chữ Latin KHÔNG dấu, ngắn, không phải âm tiết Việt cũng không phải từ Anh/viết tắt thông dụng, nằm trong đoạn chủ yếu là tiếng Việt
   // → thường là chữ bị OCR nhầm/mất dấu (chav ← chạy, md ← mô, thyt ← thụt). Không bắt được từ vẫn hợp lệ khi mất dấu (dan ← dán, anh ← ảnh).
-  const EN_OK = new Set(('a an and any app are as at be but by can css csv do doc docx email epub file for from get has have he her his how html http https id if in is it its json key link '
+  const EN_OK = new Set(('a an and any app are as at be but by can css csv do docx email epub file for from get has have he her his how html http https id if in is it its json key link '
     + 'me my new no not now of off on one or our out pdf pptx pt qr see she so ssl text the to too txt url use via was we web who why will with word xml xlsx xls ipynb yes you your zip '
     + 'cm mm kg km ml vs vd vn vnd usd tp tt ts ths gs pgs gv sv hs qd nd tw hdnd ubnd ocr ai ui ux ok wifi pc mb gb kb ppt tel fax stt tb vv').split(/\s+/));
-  function asciiSuspects(text) {
+  function asciiTokens(text, maxLen) { // token Latin không dấu đáng xét: trong đoạn chủ yếu tiếng Việt, không phải từ Anh/viết tắt/tên riêng/URL/mã
     if (!ready() || !text) return [];
     const toks = tokenize(text); let viet = 0; for (const t of toks) if (hasViet(t.token)) viet++;
     if (viet < 3 || viet < toks.length * 0.3) return [];
     const out = [];
     for (const t of toks) {
       const w = t.token, n = w.length;
-      if (n < 2 || n > 5 || /[^A-Za-z]/.test(w) || isValid(w)) continue;
+      if (n < 2 || n > maxLen || /[^A-Za-z]/.test(w)) continue;
       if (w !== w.toLowerCase() && !(w.slice(1) === w.slice(1).toLowerCase() && /(^|[.!?:;]\s*|\n\s*)$/.test(text.slice(0, t.start)))) continue; // IN HOA / Tên riêng giữa câu: bỏ qua
       if (EN_OK.has(w.toLowerCase())) continue;
       const p = text[t.start - 1], q = text[t.end];
       if ((p && /[\d./@_\-:\\#]/.test(p)) || (q && /[\d./@_\-:\\#]/.test(q))) continue;       // dính số, đường dẫn, email, mã
-      out.push({ ...t, ascii: true });
+      out.push(t);
+    }
+    return out;
+  }
+  const asciiSuspects = text => asciiTokens(text, 5).filter(t => !isValid(t.token)).map(t => ({ ...t, ascii: true }));
+
+  // Tần suất từ (điểm = số lần/1 triệu token): âm tiết không dấu mà một biến thể có dấu phổ biến hơn hẳn (dan ← dân/dẫn/dàn…) → nghi mất dấu. Chỉ là GỢI Ý, không tự sửa.
+  let FREQ = new Map(), SKEL = new Map();
+  const skeleton = w => w.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
+  function initFreq(data) {
+    FREQ = new Map(); SKEL = new Map();
+    for (const x of String(data || '').split(/\s+/)) {
+      const i = x.lastIndexOf(':'); if (i < 1) continue; const w = nfc(x.slice(0, i)), f = +x.slice(i + 1); if (!(f > 0)) continue;
+      FREQ.set(w, f); const k = skeleton(w); if (!SKEL.has(k)) SKEL.set(k, []); SKEL.get(k).push([w, f]);
+    }
+    for (const l of SKEL.values()) l.sort((a, b) => b[1] - a[1]);
+  }
+  const freqReady = () => FREQ.size > 0;
+  function freqSuspects(text, opts = {}) {
+    if (!freqReady()) return [];
+    const ratio = opts.ratio || 4, minF = opts.minFreq || 30, out = [];
+    for (const t of asciiTokens(text, 7)) {
+      const w = t.token.toLowerCase(), f0 = FREQ.get(w) || 0, alts = (SKEL.get(w) || []).filter(([a]) => a !== w);
+      if (!alts.length || alts[0][1] < minF || alts[0][1] < ratio * Math.max(f0, 1)) continue;
+      out.push({ ...t, suggestions: alts.slice(0, 3).map(a => matchCase(t.token, a[0])), freq: f0, best: alts[0][1] });
     }
     return out;
   }
 
-  root.VI = { asciiSuspects, init, ready, size, tokenize, isValid, suggest, scan, autoCorrect, validRatio, symbolSuspects, weightedED, runeCost, isProtectable, matchCase };
+  root.VI = { asciiSuspects, initFreq, freqSuspects, freqReady, init, ready, size, tokenize, isValid, suggest, scan, autoCorrect, validRatio, symbolSuspects, weightedED, runeCost, isProtectable, matchCase };
 })(typeof window !== 'undefined' ? window : globalThis);

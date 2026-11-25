@@ -56,4 +56,14 @@ t('asciiSuspects: chữ Latin không dấu vô nghĩa trong đoạn tiếng Vi�
   assert.deepEqual(f('Giữ file zip, cỡ 13 pt, mở API key, trang dnu.edu.vn, Gemini, OCR'), []);   // từ Anh/viết tắt/URL/tên riêng không bị bắt
   assert.deepEqual(f('the quick brown fox chav jumps over'), []);                                   // đoạn tiếng Anh: bỏ qua
 });
+
+t('freqSuspects: âm tiết không dấu mà biến thể có dấu phổ biến hơn hẳn → gợi ý', () => {
+  VI.init('dân dẫn đàn dàn dán dan ngày ngay chạy chay mở mô của cua trong đây vào dán tiếng việt chọn sau');
+  VI.initFreq('dân:1660 dẫn:550 đàn:407 dàn:66 dán:21 dan:16 ngày:2951 ngay:891 chạy:347 chay:19 của:12589 cua:23 trong:8710 chọn:479 chon:2');
+  const f = x => VI.freqSuspects(x).map(s => s.token);
+  assert.deepEqual(f('Chọn Gemini hoặc Claude rồi dan API key vào đây, chạy được'), ['dan']);
+  assert.deepEqual(VI.freqSuspects('Xin chào các bạn, đây là chon file của chúng tôi')[0].suggestions, ['chọn']);
+  assert.deepEqual(f('Tiếng Việt ngay lập tức, cua đồng trong ao'), ['cua']);   // ngay (891 vs ngày 2951) không đủ chênh lệch → không gắn cờ
+  assert.deepEqual(VI.freqSuspects('Giữ dan trong the quick brown'), []);        // đoạn không chủ yếu tiếng Việt
+});
 console.log(`\n${pass} test đạt`);
