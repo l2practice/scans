@@ -13,6 +13,9 @@ Chạy lệnh từ thư mục repo `scans` (cùng cấp với `index.html`, `app
 ## Deploy GitHub Pages
 Đẩy cả thư mục lên repo → Settings → Pages → chọn branch/root.
 
+## Khi sửa file .js
+Chạy `node tools/stamp-versions.mjs` trước khi commit: lệnh này đóng dấu `?v=<hash>` cho các script trong `index.html` để trình duyệt không giữ bản cũ (GitHub Pages cache 10 phút).
+
 ## Hỗ trợ
 PDF (chữ + scan/ảnh), ảnh (jpg/png/webp/bmp/gif), docx, xlsx/xls/ods/csv/tsv, pptx, html, epub, zip (đệ quy), xml/rss, json, ipynb, txt/md.
 Chưa hỗ trợ: .doc/.ppt/.rtf cũ (hãy Lưu thành .docx/.pptx), audio.
