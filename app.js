@@ -552,7 +552,7 @@ async function pdfPageLines(page, tc) {
 
 /* ================= Kiểm tra âm tiết tiếng Việt (vi-syllables.js + vi-data.js) ================= */
 let viOk = false;
-function viReady() { if (!viOk && window.VI && globalThis.VI_DATA) { try { VI.init(globalThis.VI_DATA.syllables); viOk = VI.ready(); } catch (e) { console.error(e); } } return viOk; }
+function viReady() { if (!viOk && window.VI && globalThis.VI_DATA) { try { VI.init(globalThis.VI_DATA.syllables); if (globalThis.VI_FREQ) VI.initFreq(globalThis.VI_FREQ.freq); viOk = VI.ready(); } catch (e) { console.error(e); } } return viOk; }
 const mdTextMap = (md, fn) => md.split(/(<!--[\s\S]*?-->|<[^>]+>)/).map((x, i) => i % 2 ? x : fn(x)).join(''); // chỉ đụng vào chữ, giữ nguyên thẻ/chú thích
 const mdPlainText = md => md.replace(/<!--[\s\S]*?-->|<[^>]+>/g, ' ');
 const joinPages = (it, out, marks) => ((marks ? out.map(p => `<!-- Trang ${p.n} -->\n\n${p.md}`).join('\n\n') : out[0].md).trim() + '\n');
@@ -564,7 +564,7 @@ function viProcess(it, o) { // tự sửa âm tiết vô nghĩa (chỉ khi có �
     if (it.ocrPages ? it.ocrPages.includes(pg.n) : it.isOcr) {
       if (!useAiOcr(o)) md = mdTextMap(md, x => { const r = VI.autoCorrect(x); r.changes.forEach(c => log.push({ page: pg.n, where: c.orig, fix: c.fixed, src: 'vi' })); return r.text; });
       const txt = mdPlainText(md), q = VI.validRatio(txt);
-      it.viPage[pg.n] = { ratio: q.ratio, total: q.total, sym: VI.symbolSuspects(txt).length + VI.asciiSuspects(txt).length, risky: /<table|\|/.test(md) || (md.match(/\d/g) || []).length >= 12 };
+      it.viPage[pg.n] = { ratio: q.ratio, total: q.total, sym: VI.symbolSuspects(txt).length + VI.asciiSuspects(txt).length + VI.freqSuspects(txt).length, risky: /<table|\|/.test(md) || (md.match(/\d/g) || []).length >= 12 };
       tot += q.total; ok += q.valid; if (q.total >= 20 && q.ratio < 0.85) low.push(pg.n);
     }
     out.push({ n: pg.n, md });
@@ -580,8 +580,10 @@ function viMark(root) { // tô sáng trong Xem trước: âm tiết lạ (vàng)
   for (const node of nodes) {
     if (cnt > 1500) break;
     const t = node.nodeValue; if (t.length < 2) continue;
+    const fs = new Map(VI.freqSuspects(t).map(x => [x.start, x])), asc = VI.asciiSuspects(t), ascAt = new Set(asc.map(x => x.start));
     const ms = [...VI.scan(t).map(x => ({ s: x.start, e: x.end, c: 'vi-sus', tip: x.suggestion ? 'Gợi ý: ' + x.suggestion : 'Âm tiết lạ – có thể OCR sai' })),
-      ...VI.asciiSuspects(t).map(x => ({ s: x.start, e: x.end, c: 'vi-sus', tip: 'Chữ không dấu vô nghĩa – có thể OCR nhầm/mất dấu' })),
+      ...asc.map(x => ({ s: x.start, e: x.end, c: 'vi-sus', tip: 'Chữ không dấu vô nghĩa – có thể OCR nhầm/mất dấu' + (fs.has(x.start) ? '. Có thể là: ' + fs.get(x.start).suggestions.join(', ') : '') })),
+      ...[...fs.values()].filter(x => !ascAt.has(x.start)).map(x => ({ s: x.start, e: x.end, c: 'vi-soft', tip: 'Có thể mất dấu: ' + x.suggestions.join(', ') + ' (gợi ý theo tần suất, không chắc chắn)' })),
       ...VI.symbolSuspects(t).filter(x => !/ngoặc đơn/.test(x.reason)).map(x => ({ s: x.start, e: x.end, c: 'vi-sym', tip: x.reason }))].sort((a, b) => a.s - b.s);
     if (!ms.length) continue;
     const f = document.createDocumentFragment(); let at = 0;

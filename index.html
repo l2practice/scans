@@ -277,7 +277,7 @@ h3 .ic,.aihead .ic{color:var(--accent)}
 .add-more{display:inline-flex}
 @media(min-width:761px){.bar{position:sticky;top:10px;z-index:15;padding:8px 12px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 20px rgba(40,35,90,.08)}}
 @media(max-width:900px){.source-compare-grid{grid-template-columns:1fr}.source-preview{height:60svh;min-height:320px}}
-.vi-sus{background:rgba(255,200,0,.38);border-bottom:2px dotted #d68a00;border-radius:2px;cursor:help}.vi-sym{background:rgba(255,90,90,.28);border-bottom:2px dotted #c33;border-radius:2px;cursor:help}
+.vi-sus{background:rgba(255,200,0,.38);border-bottom:2px dotted #d68a00;border-radius:2px;cursor:help}.vi-soft{background:rgba(80,140,255,.22);border-bottom:2px dotted #3b78e7;border-radius:2px;cursor:help}.vi-sym{background:rgba(255,90,90,.28);border-bottom:2px dotted #c33;border-radius:2px;cursor:help}
 .math-pop{position:absolute;z-index:60;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:10px 12px;max-width:min(92vw,460px)}.math-pop code{display:block;font-size:12px;color:var(--muted);margin-bottom:8px;word-break:break-all}.math-pop .acts{display:flex;gap:8px;flex-wrap:wrap}.preview-doc .math[data-done]{cursor:pointer;border-radius:4px}.preview-doc .math[data-done]:hover{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('dc_theme')==='dark'?'dark':'light'}catch{document.documentElement.dataset.theme='light'}</script>
@@ -409,7 +409,7 @@ h3 .ic,.aihead .ic{color:var(--accent)}
     <div class="grid" style="margin-top:14px">
       <label class="chk"><input type="checkbox" id="layout" checked><span>Giữ bố cục văn bản hành chính<small>Căn giữa/phải/đều, thụt đầu dòng, bảng 2 cột quốc hiệu – cơ quan, in đậm, ngắt trang. Tắt nếu muốn Markdown thuần.</small></span></label>
       <label class="chk"><input type="checkbox" id="clean" checked><span>Lọc chữ rác ở vùng không phải chữ<small>Bỏ chữ ký, con dấu, hình, đường kẻ bị đọc nhầm thành chữ; khi làm sạch ảnh cũng loại mực xanh và dấu đỏ.</small></span></label>
-      <label class="chk"><input type="checkbox" id="viMark" checked><span>Tô sáng chỗ nghi sai trong Xem trước<small>Vàng: âm tiết tiếng Việt không hợp lệ (rê chuột xem gợi ý). Đỏ: ký hiệu lạ. Chỉ để soát mắt, không đưa vào file tải về.</small></span></label>
+      <label class="chk"><input type="checkbox" id="viMark" checked><span>Tô sáng chỗ nghi sai trong Xem trước<small>Vàng: âm tiết không hợp lệ. Xanh: có thể mất dấu (dan→dân/dán…). Đỏ: ký hiệu lạ. Rê chuột xem gợi ý. Chỉ để soát mắt, không đưa vào file tải về.</small></span></label>
       <label class="chk"><input type="checkbox" id="viSkip"><span>Tiết kiệm AI: bỏ qua trang trông đã sạch<small>Khi dùng "Tesseract đọc trước, AI chỉ sửa lỗi": trang ≥98% âm tiết hợp lệ, không bảng, ít số thì không gửi cho AI. Lưu ý: chữ mất dấu mà vẫn thành từ hợp lệ (dán→dan) không bị phát hiện.</small></span></label>
       <label class="chk"><input type="checkbox" id="tables" checked><span>Dò bảng có đường kẻ (Tesseract)<small>Tự tìm khung bảng, OCR từng ô, nhận diện ô gộp. Bảng lớn nên dùng AI.</small></span></label>
       <label class="chk"><input type="checkbox" id="pre" checked><span>Làm sạch ảnh trước khi OCR<small>Khử bóng, tăng tương phản, loại dấu đỏ (Tesseract).</small></span></label>
@@ -460,6 +460,7 @@ h3 .ic,.aihead .ic{color:var(--accent)}
 <script src="tables.js"></script>
 <script src="nd30.js"></script>
 <script src="vi-data.js"></script>
+<script src="vi-freq.js"></script>
 <script src="vi-syllables.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js?v=20261125-vi"></script>
