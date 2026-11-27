@@ -527,7 +527,8 @@ async function ocrCanvas(cv, opts) {
     }
     parts.push(lay(rest)); md = parts.filter(Boolean).join('\n\n');
   }
-  return { md, conf: data.confidence, tables: tables.length };
+  const hs = lines.map(l => l.y1 - l.y0).filter(h => h > 0);
+  return { md, conf: data.confidence, tables: tables.length, textH: hs.length >= 3 ? median(hs) : null };
 }
 
 /* ================= PDF ================= */
@@ -685,15 +686,25 @@ async function convertImage(file, ctx) {
     const blob = await new Promise(r => c3.toBlob(r, 'image/jpeg', 0.85));
     pic = { data: new Uint8Array(await blob.arrayBuffer()), w: c3.width, h: c3.height };
   }
-  bmp.close && bmp.close();
+  const bmp2 = bmp; // giữ ảnh gốc để có thể phóng lớn hơn khi chữ nhỏ
   ocr.onProgress = f => progress(0.1 + 0.9 * f, `OCR ${Math.round(f * 100)}%`);
   if (useAiOcr(opts)) progress(0.2, 'AI đang đọc…');
-  const r = await ocrCanvas(cv, opts);
-  ocr.onProgress = null; cv.width = cv.height = 0;
+  let r = await ocrCanvas(cv, opts);
+  if (!useAiOcr(opts) && !r.tables && r.textH && r.textH < 38) { // chữ nhỏ (không có bảng – bảng đọc theo từng ô, phóng lại làm hỏng): phóng để chữ cao ~46px (Tesseract đọc tốt nhất ở cỡ này; cách làm của sniplite/PaddleOCR là đưa mỗi dòng về một cỡ chuẩn) rồi đọc lại, chỉ nhận nếu tốt hơn
+    const k2 = Math.min(3, 46 / r.textH), W2 = Math.round(cv.width * k2), H2 = Math.round(cv.height * k2);
+    if (k2 >= 1.25 && W2 * H2 <= 2.4e7) {
+      progress(0.6, 'Chữ nhỏ – đọc lại ở độ phân giải cao hơn…');
+      const c2 = el('canvas'); c2.width = W2; c2.height = H2; const g2 = c2.getContext('2d', { willReadFrequently: true });
+      g2.fillStyle = '#fff'; g2.fillRect(0, 0, W2, H2); g2.imageSmoothingQuality = 'high'; g2.drawImage(bmp2, 0, 0, W2, H2);
+      const r2 = await ocrCanvas(c2, opts); c2.width = c2.height = 0;
+      if (r2.conf != null && r2.conf >= r.conf) r = { ...r2, upscaled: Math.round(k2 * 10) / 10 };
+    }
+  }
+  ocr.onProgress = null; cv.width = cv.height = 0; bmp2.close && bmp2.close();
   const ai = r.conf == null;
   return {
     md: r.md,
-    info: ai ? `Ảnh · OCR bằng AI (${opts.engine === 'gemini' ? 'Gemini' : 'Claude'})` : `Ảnh OCR · độ tin cậy ~${Math.round(r.conf)}%` + (r.tables ? ` · ${r.tables} bảng` : ''),
+    info: ai ? `Ảnh · OCR bằng AI (${opts.engine === 'gemini' ? 'Gemini' : 'Claude'})` : `Ảnh OCR · độ tin cậy ~${Math.round(r.conf)}%` + (r.tables ? ` · ${r.tables} bảng` : '') + (r.upscaled ? ` · chữ nhỏ, phóng x${r.upscaled}` : ''),
     warn: !r.md.trim() ? 'Không nhận dạng được chữ.' : (!ai && opts.kind === 'free' ? 'Ghi chú/sơ đồ viết tay: Tesseract không đọc được chữ viết tay – hãy chọn công cụ AI trong Tuỳ chọn.' : (!ai && r.conf < 70 ? 'OCR kém tin cậy – hãy soát lại kỹ (hoặc dùng chế độ AI).' : '')),
     pics: pic ? [pic] : null, isOcr: true,
   };
